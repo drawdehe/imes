@@ -59,10 +59,10 @@ nrf.pa_level = -12
 def tx(address):
     nrf.open_tx_pipe(address)
     nrf.listen = False
-    nrf.channel = channel
 
 def rx(address):
     nrf.open_rx_pipe(0, address)
+    nrf.listen = True
 
 def main():
     value = input("Press 1 for transmitter or 0 for receiver: ")
