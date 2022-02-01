@@ -1,0 +1,3 @@
+Rx NRF24L01+ started w/ power 0, SPI freq: 20000000 hz
+10 successfull transmissions, 0 failures, 85504.53907191346 bps
+10 received, 32.0 average, 77326.70699831228 bps

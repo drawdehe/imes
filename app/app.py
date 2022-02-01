@@ -143,6 +143,7 @@ Simple example of using the RF24 class.
 import time
 import struct
 import board
+import numpy as np
 from digitalio import DigitalInOut
 
 # if running this on a ATSAMD21 M0 based board
@@ -206,14 +207,14 @@ payload = [0.0]
 # nrf.payload_length = 4
 
 
-def master(count=20):  # count = 5 will only transmit 5 packets
+def master(count=1000):  # count = 5 will only transmit 5 packets
     """Transmits an incrementing integer every second"""
     nrf.listen = False  # ensures the nRF24L01 is in TX mode
 
     while count:
         # use struct.pack to packetize your data
         # into a usable payload
-        buffer = struct.pack("<f", payload[0])
+        buffer = struct.pack("<ff", payload[0])
         # "<f" means a single little endian (4 byte) float value.
         start_timer = time.monotonic_ns()  # start timer
         result = nrf.send(buffer)
@@ -226,7 +227,7 @@ def master(count=20):  # count = 5 will only transmit 5 packets
                 f"{(end_timer - start_timer) / 1000} us. Sent: {payload[0]}"
             )
             payload[0] += 0.01
-        time.sleep(1)
+        #time.sleep(1)
         count -= 1
 
 
@@ -235,23 +236,38 @@ def slave(timeout=6):
     after 6 seconds of no received transmission"""
     nrf.listen = True  # put radio into RX mode and power up
 
+    received = []
+
+    start_time = time.time()
     start = time.monotonic()
+
     while (time.monotonic() - start) < timeout:
         if nrf.available():
             # grab information about the received payload
             payload_size, pipe_number = (nrf.any(), nrf.pipe)
+            received.append(payload_size)
             # fetch 1 payload from RX FIFO
             buffer = nrf.read()  # also clears nrf.irq_dr status flag
             # expecting a little endian float, thus the format string "<f"
             # buffer[:4] truncates padded 0s if dynamic payloads are disabled
-            payload[0] = struct.unpack("<f", buffer[:4])[0]
+            payload[0] = struct.unpack("<ff", buffer[:8])[0]
             # print details about the received packet
-            print(f"Received {payload_size} bytes on pipe {pipe_number}: {payload[0]}")
+            #print(f"Received {payload_size} bytes on pipe {pipe_number}: {payload[0]}")
             start = time.monotonic()
+
+    total_time = time.time() - start_time - timeout
+    print("Total time: ")
+    print(total_time)
+    print("Throughput: ")
+    print(throughput_measurement(len(received), np.mean(received) * 8, total_time))
+    print(len(received))
+    print(np.mean(received))
 
     # recommended behavior is to keep in TX mode while idle
     nrf.listen = False  # put the nRF24L01 is in TX mode
 
+def throughput_measurement(nbr_of_packets, packet_size, total_time):
+    return (packet_size * nbr_of_packets) / total_time
 
 def set_role():
     """Set the role using stdin stream. Timeout arg for slave() can be
@@ -277,7 +293,6 @@ def set_role():
         return False
     print(user_input[0], "is an unrecognized input. Please try again.")
     return set_role()
-
 
 print("    nRF24L01 Simple test")
 

@@ -1,0 +1,7 @@
+What is the maximum throughput?
+
+What does the error "radio hardware not working"?
+
+How do we check the prerequisits?
+
+How do we check the pin connections?
