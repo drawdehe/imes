@@ -238,11 +238,14 @@ def slave(timeout=6):
 
     received = []
 
-    start_time = time.time()
+    start_time = None
     start = time.monotonic()
 
+    start_test = time.time()
     while (time.monotonic() - start) < timeout:
         if nrf.available():
+            if start_time is None:
+                start_time = time.monotonic()
             # grab information about the received payload
             payload_size, pipe_number = (nrf.any(), nrf.pipe)
             received.append(payload_size)
@@ -253,13 +256,14 @@ def slave(timeout=6):
             payload[0] = struct.unpack("<f", buffer[:4])[0]
             # print details about the received packet
             print(f"Received {payload_size} bytes on pipe {pipe_number}: {payload[0]}")
-            start = time.monotonic()
 
-    total_time = time.time() - start_time - timeout
+    total_time = time.monotonic() - start_time
+    end_test = time.time()
+    total_time_test = end_test - start_test - timeout
     print("Total time: ")
-    print(total_time)
+    print(total_time_test)
     print("Throughput: ")
-    print(throughput_measurement(len(received), np.mean(received) * 8, total_time))
+    print(throughput_measurement(len(received), np.mean(received) * 8, total_time_test))
     print(len(received))
     print(np.mean(received))
 
@@ -267,7 +271,7 @@ def slave(timeout=6):
     nrf.listen = False  # put the nRF24L01 is in TX mode
 
 def throughput_measurement(nbr_of_packets, packet_size, total_time):
-    return (packet_size * nbr_of_packets) / total_time
+    return (packet_size * nbr_of_packets) / (total_time * 1000)
 
 def set_role():
     """Set the role using stdin stream. Timeout arg for slave() can be
