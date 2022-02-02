@@ -207,14 +207,14 @@ payload = [0.0]
 # nrf.payload_length = 4
 
 
-def master(count=1000):  # count = 5 will only transmit 5 packets
+def master(count=5):  # count = 5 will only transmit 5 packets
     """Transmits an incrementing integer every second"""
     nrf.listen = False  # ensures the nRF24L01 is in TX mode
 
     while count:
         # use struct.pack to packetize your data
         # into a usable payload
-        buffer = struct.pack("<ff", payload[0])
+        buffer = struct.pack("<f", payload[0])
         # "<f" means a single little endian (4 byte) float value.
         start_timer = time.monotonic_ns()  # start timer
         result = nrf.send(buffer)
@@ -250,9 +250,9 @@ def slave(timeout=6):
             buffer = nrf.read()  # also clears nrf.irq_dr status flag
             # expecting a little endian float, thus the format string "<f"
             # buffer[:4] truncates padded 0s if dynamic payloads are disabled
-            payload[0] = struct.unpack("<ff", buffer[:8])[0]
+            payload[0] = struct.unpack("<f", buffer[:4])[0]
             # print details about the received packet
-            #print(f"Received {payload_size} bytes on pipe {pipe_number}: {payload[0]}")
+            print(f"Received {payload_size} bytes on pipe {pipe_number}: {payload[0]}")
             start = time.monotonic()
 
     total_time = time.time() - start_time - timeout
