@@ -15,4 +15,4 @@ buf = tun.read(100)
 tun.write(buf)
 
 # Close and destroy interface
-tun.close()
+#tun.close()
