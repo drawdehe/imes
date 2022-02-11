@@ -1,128 +1,225 @@
-from multiprocessing import Process
-from circuitpython_nrf24l01.rf24 import RF24
-import board
-import busio
-import digitalio as dio
+"""
+A simple example of sending data from 1 nRF24L01 transceiver to another.
+This example was written to be used on 2 devices acting as 'nodes'.
+"""
+import sys
+import argparse
 import time
 import struct
-import argparse
-from random import randint
-import numpy as np
+from RF24 import RF24, RF24_PA_LOW
 
-SPI0 = {
-    'MOSI':10,#dio.DigitalInOut(board.D10),
-    'MISO':9,#dio.DigitalInOut(board.D9),
-    'clock':11,#dio.DigitalInOut(board.D11),
-    'ce_pin':dio.DigitalInOut(board.D17),
-    'csn':dio.DigitalInOut(board.D8),
-    }
-SPI1 = {
-    'MOSI':20,#dio.DigitalInOut(board.D10),
-    'MISO':19,#dio.DigitalInOut(board.D9),
-    'clock':21,#dio.DigitalInOut(board.D11),
-    'ce_pin':dio.DigitalInOut(board.D27),
-    'csn':dio.DigitalInOut(board.D18),
-    }
 
-def tx(nrf, channel, address, count, size):
-    nrf.open_tx_pipe(address)  # set address of RX node into a TX pipe
-    nrf.listen = False
-    nrf.channel = channel
+parser = argparse.ArgumentParser(
+    description=__doc__,
+    formatter_class=argparse.RawDescriptionHelpFormatter
+)
+parser.add_argument(
+    "-n",
+    "--node",
+    type=int,
+    choices=range(2),
+    help="the identifying radio number (or node ID number)"
+)
+parser.add_argument(
+    "-r",
+    "--role",
+    type=int,
+    choices=range(2),
+    help="'1' specifies the TX role. '0' specifies the RX role."
+)
 
-    status = []
-    buffer = np.random.bytes(size)
+##### TUN STUFF #####
 
-    start = time.monotonic()
-    while count:
-        # use struct.pack to packetize your data
-        # into a usable payload
+from tuntap import TunTap
 
-        #buffer = struct.pack("<i", count)
-        # 'i' means a single 4 byte int value.
-        # '<' means little endian byte order. this may be optional
-        #print("Sending: {} as struct: {}".format(count, buffer))
-        result = nrf.send(buffer)
+iface = 'LongGe'
+
+# Create and configure a TUN interface
+tun = TunTap(nic_type="Tun", nic_name="tun0")
+tun.config(ip="192.168.1.10", mask="255.255.255.0", gateway="192.168.2.2")
+
+# Read from TUN interface
+#buf = tun.read(100)
+
+# Write to TUN interface
+#tun.write(buf)
+
+# Close and destroy interface
+tun.close()
+
+########### USER CONFIGURATION ###########
+# See https://github.com/TMRh20/RF24/blob/master/pyRF24/readme.md
+# Radio CE Pin, CSN Pin, SPI Speed
+# CE Pin uses GPIO number with BCM and SPIDEV drivers, other platforms use
+# their own pin numbering
+# CS Pin addresses the SPI bus number at /dev/spidev<a>.<b>
+# ie: RF24 radio(<ce_pin>, <a>*10+<b>); spidev1.0 is 10, spidev1.1 is 11 etc..
+
+# Generic:
+radio = RF24(22, 0)
+################## Linux (BBB,x86,etc) #########################
+# See http://nRF24.github.io/RF24/pages.html for more information on usage
+# See http://iotdk.intel.com/docs/master/mraa/ for more information on MRAA
+# See https://www.kernel.org/doc/Documentation/spi/spidev for more
+# information on SPIDEV
+
+# using the python keyword global is bad practice. Instead we'll use a 1 item
+# list to store our float number for the payloads sent/received
+payload = [0.0]
+
+
+def master():
+    """Transmits an incrementing float every second"""
+    radio.stopListening()  # put radio in TX mode
+    failures = 0
+    while failures < 6:
+        # use struct.pack() to packet your data into the payload
+        # "<f" means a single little endian (4 byte) float value.
+        buf = tun.read(100)
+        buffer = struct.pack("<f", buf)
+        start_timer = time.monotonic_ns()  # start timer
+        result = radio.write(buffer)
+        end_timer = time.monotonic_ns()  # end timer
         if not result:
-            #print("send() failed or timed out")
-            #print(nrf.what_happened())
-            status.append(False)
+            print("Transmission failed or timed out")
+            failures += 1
         else:
-            #print("send() successful")
-            status.append(True)
-        # print timer results despite transmission success
-        count -= 1
-    total_time = time.monotonic() - start
+            print(
+                "Transmission successful! Time to Transmit: "
+                "{} us. Sent: {}".format(
+                    (end_timer - start_timer) / 1000,
+                    payload[0]
+                )
+            )
+            payload[0] += 0.01
+        time.sleep(1)
+    print(failures, "failures detected. Leaving TX role.")
 
-    print('{} successfull transmissions, {} failures, {} bps'.format(sum(status), len(status)-sum(status), size*8*len(status)/total_time))
 
-def rx(nrf, channel, address, count):
-    nrf.open_rx_pipe(0, address)
-    nrf.listen = True  # put radio into RX mode and power up
-    nrf.channel = channel
+def slave(timeout=6):
+    """Listen for any payloads and print the transaction
 
-    print('Rx NRF24L01+ started w/ power {}, SPI freq: {} hz'.format(nrf.pa_level, nrf.spi_frequency))
+    :param int timeout: The number of seconds to wait (with no transmission)
+        until exiting function.
+    """
+    radio.startListening()  # put radio in RX mode
 
-    received = []
-
-    start_time = None
-    start = time.monotonic()
-    while count and (time.monotonic() - start) < 6:
-        if nrf.update() and nrf.pipe is not None:
-            if start_time is None:
-                start_time = time.monotonic()
-            # print details about the received packet
+    start_timer = time.monotonic()
+    while (time.monotonic() - start_timer) < timeout:
+        has_payload, pipe_number = radio.available_pipe()
+        if has_payload:
             # fetch 1 payload from RX FIFO
-            received.append(nrf.any())
-            rx = nrf.read()  # also clears nrf.irq_dr status flag
-            # expecting an int, thus the string format '<i'
-            # the rx[:4] is just in case dynamic payloads were disabled
-            #buffer = struct.unpack("<i", rx[:4])  # [:4] truncates padded 0s
-            # print the only item in the resulting tuple from
-            # using `struct.unpack()`
-            #print("Received: {}, Raw: {}".format(buffer[0], rx))
-            #start = time.monotonic()
-            count -= 1
-            # this will listen indefinitely till count == 0
-    total_time = time.monotonic() - start_time
+            buffer = radio.read(radio.payloadSize)
+            # use struct.unpack() to convert the buffer into usable data
+            # expecting a little endian float, thus the format string "<f"
+            # buffer[:4] truncates padded 0s in case payloadSize was not set
+            payload[0] = struct.unpack("<f", buffer[:4])[0]
+            tun.write(payload[0])
+            # print details about the received packet
+            print(
+                "Received {} bytes on pipe {}: {}".format(
+                    radio.payloadSize,
+                    pipe_number,
+                    payload[0]
+                )
+            )
+            start_timer = time.monotonic()  # reset the timeout timer
 
-    print('{} received, {} average, {} bps'.format(len(received), np.mean(received), np.sum(received)*8/total_time))
+    print("Nothing received in", timeout, "seconds. Leaving RX role")
+    # recommended behavior is to keep in TX mode while idle
+    radio.stopListening()  # put the radio in TX mode
+
+
+def set_role():
+    """Set the role using stdin stream. Timeout arg for slave() can be
+    specified using a space delimiter (e.g. 'R 10' calls `slave(10)`)
+
+    :return:
+        - True when role is complete & app should continue running.
+        - False when app should exit
+    """
+    user_input = input(
+        "*** Enter 'R' for receiver role.\n"
+        "*** Enter 'T' for transmitter role.\n"
+        "*** Enter 'Q' to quit example.\n"
+    ) or "?"
+    user_input = user_input.split()
+    if user_input[0].upper().startswith("R"):
+        if len(user_input) > 1:
+            slave(int(user_input[1]))
+        else:
+            slave()
+        return True
+    elif user_input[0].upper().startswith("T"):
+        master()
+        return True
+    elif user_input[0].upper().startswith("Q"):
+        radio.powerDown()
+        return False
+    print(user_input[0], "is an unrecognized input. Please try again.")
+    return set_role()
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='NRF24L01+ test')
-    parser.add_argument('--src', dest='src', type=str, default='me', help='NRF24L01+\'s source address')
-    parser.add_argument('--dst', dest='dst', type=str, default='me', help='NRF24L01+\'s destination address')
-    parser.add_argument('--count', dest='cnt', type=int, default=10, help='Number of transmissions')
-    parser.add_argument('--size', dest='size', type=int, default=32, help='Packet size')
-    parser.add_argument('--txchannel', dest='txchannel', type=int, default=76, help='Tx channel', choices=range(0,125))
-    parser.add_argument('--rxchannel', dest='rxchannel', type=int, default=76, help='Rx channel', choices=range(0,125))
 
-    args = parser.parse_args()
+    args = parser.parse_args()  # parse any CLI args
 
-    SPI0['spi'] = busio.SPI(**{x: SPI0[x] for x in ['clock', 'MOSI', 'MISO']})
-    SPI1['spi'] = busio.SPI(**{x: SPI1[x] for x in ['clock', 'MOSI', 'MISO']})
+    # initialize the nRF24L01 on the spi bus
+    if not radio.begin():
+        raise RuntimeError("radio hardware is not responding")
 
-    # initialize the nRF24L01 on the spi bus object
-    # rx_nrf = RF24(**{x: SPI0[x] for x in ['spi', 'csn', 'ce']})
-    # tx_nrf = RF24(**{x: SPI1[x] for x in ['spi', 'csn', 'ce']})
+    # For this example, we will use different addresses
+    # An address need to be a buffer protocol object (bytearray)
+    address = [b"1Node", b"2Node"]
+    # It is very helpful to think of an address as a path instead of as
+    # an identifying device destination
 
-    rx_nrf = RF24(SPI0['spi'], SPI0['csn'], SPI0['ce_pin'])
-    tx_nrf = RF24(SPI1['spi'], SPI1['csn'], SPI1['ce_pin'])
+    print(sys.argv[0])  # print example name
 
-    for nrf in [rx_nrf, tx_nrf]:
-        nrf.data_rate = 1
-        nrf.auto_ack = True
-        #nrf.dynamic_payloads = True
-        nrf.payload_length = 32
-        nrf.crc = True
-        nrf.ack = 1
-        nrf.spi_frequency = 20000000
+    # to use different addresses on a pair of radios, we need a variable to
+    # uniquely identify which address this radio will use to transmit
+    # 0 uses address[0] to transmit, 1 uses address[1] to transmit
+    radio_number = args.node  # uses default value from `parser`
+    if args.node is None:  # if '--node' arg wasn't specified
+        radio_number = bool(
+            int(
+                input(
+                    "Which radio is this? Enter '0' or '1'. Defaults to '0' "
+                ) or 0
+            )
+        )
 
-    rx_process = Process(target=rx, kwargs={'nrf':rx_nrf, 'address':bytes(args.src, 'utf-8'), 'count': args.cnt, 'channel': args.rxchannel})
-    tx_process = Process(target=tx, kwargs={'nrf':tx_nrf, 'address':bytes(args.dst, 'utf-8'), 'count': args.cnt, 'channel': args.txchannel, 'size':args.size})
+    # set the Power Amplifier level to -12 dBm since this test example is
+    # usually run with nRF24L01 transceivers in close proximity of each other
+    radio.setPALevel(RF24_PA_LOW)  # RF24_PA_MAX is default
 
-    rx_process.start()
-    time.sleep(1)
-    tx_process.start()
+    # set the TX address of the RX node into the TX pipe
+    radio.openWritingPipe(address[radio_number])  # always uses pipe 0
 
-    tx_process.join()
-    rx_process.join()
+    # set the RX address of the TX node into a RX pipe
+    radio.openReadingPipe(1, address[not radio_number])  # using pipe 1
+
+    # To save time during transmission, we'll set the payload size to be only
+    # what we need. A float value occupies 4 bytes in memory using
+    # struct.pack(); "<f" means a little endian unsigned float
+    radio.payloadSize = len(struct.pack("<f", payload[0]))
+
+    # for debugging, we have 2 options that print a large block of details
+    # (smaller) function that prints raw register values
+    # radio.printDetails()
+    # (larger) function that prints human readable data
+    # radio.printPrettyDetails()
+
+    try:
+        if args.role is None:  # if not specified with CLI arg '-r'
+            while set_role():
+                pass  # continue example until 'Q' is entered
+        else:  # if role was set using CLI args
+            # run role once and exit
+            master() if bool(args.role) else slave()
+    except KeyboardInterrupt:
+        print(" Keyboard Interrupt detected. Exiting...")
+        radio.powerDown()
+        tun.close()
+        sys.exit()
+    tun.close()
