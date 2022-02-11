@@ -1,4 +1,3 @@
-"""
 from multiprocessing import Process
 from circuitpython_nrf24l01.rf24 import RF24
 import board
@@ -9,7 +8,6 @@ import struct
 import argparse
 from random import randint
 import numpy as np
-from digitalio import DigitalInOut
 
 SPI0 = {
     'MOSI':10,#dio.DigitalInOut(board.D10),
@@ -26,286 +24,105 @@ SPI1 = {
     'csn':dio.DigitalInOut(board.D18),
     }
 
-# invalid default values for scoping
-SPI_BUS, CSN_PIN, CE_PIN = (None, None, None)
-
-try:  # on Linux
-    import spidev
-
-    SPI_BUS = spidev.SpiDev()  # for a faster interface on linux
-    CSN_PIN = 0  # use CE0 on default bus (even faster than using any pin)
-    CE_PIN = DigitalInOut(board.D22)  # using pin gpio22 (BCM numbering)
-
-except ImportError:  # on CircuitPython only
-    # using board.SPI() automatically selects the MCU's
-    # available SPI pins, board.SCK, board.MOSI, board.MISO
-    SPI_BUS = board.SPI()  # init spi bus object
-
-    # change these (digital output) pins accordingly
-    CE_PIN = DigitalInOut(board.D4)
-    CSN_PIN = DigitalInOut(board.D5)
-
-
-# initialize the nRF24L01 on the spi bus object
-nrf = RF24(SPI_BUS, CSN_PIN, CE_PIN)
-# On Linux, csn value is a bit coded
-#                 0 = bus 0, CE0  # SPI bus 0 is enabled by default
-#                10 = bus 1, CE0  # enable SPI bus 2 prior to running this
-#                21 = bus 2, CE1  # enable SPI bus 1 prior to running this
-
-# set the Power Amplifier level to -12 dBm since this test example is
-# usually run with nRF24L01 transceivers in close proximity
-nrf.pa_level = -12
-
-# addresses needs to be in a buffer protocol object (bytearray)
-address = [b"1Node", b"2Node"]
-
-# to use different addresses on a pair of radios, we need a variable to
-# uniquely identify which address this radio will use to transmit
-# 0 uses address[0] to transmit, 1 uses address[1] to transmit
-radio_number = bool(
-    int(input("Which radio is this? Enter '0' or '1'. Defaults to '0' ") or 0)
-)
-
-# set TX address of RX node into the TX pipe
-nrf.open_tx_pipe(address[radio_number])  # always uses pipe 0
-
-# set RX address of TX node into an RX pipe
-nrf.open_rx_pipe(1, address[not radio_number])  # using pipe 1
-
-# using the python keyword global is bad practice. Instead we'll use a 1 item
-# list to store our float number for the payloads sent
-payload = [0.0]
-
-# uncomment the following 3 lines for compatibility with TMRh20 library
-# nrf.allow_ask_no_ack = False
-# nrf.dynamic_payloads = False
-# nrf.payload_length = 4
-def tx(count=20):
+def tx(nrf, channel, address, count, size):
+    nrf.open_tx_pipe(address)  # set address of RX node into a TX pipe
     nrf.listen = False
+    nrf.channel = channel
 
-    while count:
-        # use struct.pack to packetize your data
-        # into a usable payload
-        buffer = struct.pack("<f", payload[0])
-        # "<f" means a single little endian (4 byte) float value.
-        start_timer = time.monotonic_ns()  # start timer
-        result = nrf.send(buffer)
-        end_timer = time.monotonic_ns()  # end timer
-        if not result:
-            print("send() failed or timed out")
-        else:
-            print(
-                "Transmission successful! Time to Transmit:",
-                f"{(end_timer - start_timer) / 1000} us. Sent: {payload[0]}"
-            )
-            payload[0] += 0.01
-        time.sleep(0.1)
-        count -= 1
-def rx(timeout=6):
-    Polls the radio and prints the received value. This method expires
-    after 6 seconds of no received transmission
-    nrf.listen = True  # put radio into RX mode and power up
+    status = []
+    buffer = np.random.bytes(size)
 
     start = time.monotonic()
-    while (time.monotonic() - start) < timeout:
-        if nrf.available():
-            # grab information about the received payload
-            payload_size, pipe_number = (nrf.any(), nrf.pipe)
-            # fetch 1 payload from RX FIFO
-            buffer = nrf.read()  # also clears nrf.irq_dr status flag
-            # expecting a little endian float, thus the format string "<f"
-            # buffer[:4] truncates padded 0s if dynamic payloads are disabled
-            payload[0] = struct.unpack("<f", buffer[:4])[0]
-            # print details about the received packet
-            print(f"Received {payload_size} bytes on pipe {pipe_number}: {payload[0]}")
-            start = time.monotonic()
-
-    # recommended behavior is to keep in TX mode while idle
-    nrf.listen = False  # put the nRF24L01 is in TX mode
-
-def main():
-    value = input("Press 1 for transmitter or 0 for receiver: ")
-    if value == 1:
-        print("Transmitter")
-        tx(b"Transmit")
-    if value == 0:
-        print("Receiver")
-        rx(b"Receive")
-
-if __name__ == "__main__":
-    main()
-"""
-
-"""
-Simple example of using the RF24 class.
-"""
-import time
-import struct
-import board
-import numpy as np
-from digitalio import DigitalInOut
-
-# if running this on a ATSAMD21 M0 based board
-# from circuitpython_nrf24l01.rf24_lite import RF24
-from circuitpython_nrf24l01.rf24 import RF24
-
-# invalid default values for scoping
-SPI_BUS, CSN_PIN, CE_PIN = (None, None, None)
-
-try:  # on Linux
-    import spidev
-
-    SPI_BUS = spidev.SpiDev()  # for a faster interface on linux
-    CSN_PIN = 0  # use CE0 on default bus (even faster than using any pin)
-    CE_PIN = DigitalInOut(board.D22)  # using pin gpio22 (BCM numbering)
-
-except ImportError:  # on CircuitPython only
-    # using board.SPI() automatically selects the MCU's
-    # available SPI pins, board.SCK, board.MOSI, board.MISO
-    SPI_BUS = board.SPI()  # init spi bus object
-
-    # change these (digital output) pins accordingly
-    CE_PIN = DigitalInOut(board.D4)
-    CSN_PIN = DigitalInOut(board.D5)
-
-
-# initialize the nRF24L01 on the spi bus object
-nrf = RF24(SPI_BUS, CSN_PIN, CE_PIN)
-# On Linux, csn value is a bit coded
-#                 0 = bus 0, CE0  # SPI bus 0 is enabled by default
-#                10 = bus 1, CE0  # enable SPI bus 2 prior to running this
-#                21 = bus 2, CE1  # enable SPI bus 1 prior to running this
-
-# set the Power Amplifier level to -12 dBm since this test example is
-# usually run with nRF24L01 transceivers in close proximity
-nrf.pa_level = -12
-
-# addresses needs to be in a buffer protocol object (bytearray)
-address = [b"1Node", b"2Node"]
-
-# to use different addresses on a pair of radios, we need a variable to
-# uniquely identify which address this radio will use to transmit
-# 0 uses address[0] to transmit, 1 uses address[1] to transmit
-radio_number = bool(
-    int(input("Which radio is this? Enter '0' or '1'. Defaults to '0' ") or 0)
-)
-
-# set TX address of RX node into the TX pipe
-nrf.open_tx_pipe(address[radio_number])  # always uses pipe 0
-
-# set RX address of TX node into an RX pipe
-nrf.open_rx_pipe(1, address[not radio_number])  # using pipe 1
-
-# using the python keyword global is bad practice. Instead we'll use a 1 item
-# list to store our float number for the payloads sent
-payload = [0.0]
-
-# uncomment the following 3 lines for compatibility with TMRh20 library
-# nrf.allow_ask_no_ack = False
-# nrf.dynamic_payloads = False
-# nrf.payload_length = 4
-
-
-def master(count=5):  # count = 5 will only transmit 5 packets
-    """Transmits an incrementing integer every second"""
-    nrf.listen = False  # ensures the nRF24L01 is in TX mode
-
     while count:
         # use struct.pack to packetize your data
         # into a usable payload
-        buffer = struct.pack("<f", payload[0])
-        # "<f" means a single little endian (4 byte) float value.
-        start_timer = time.monotonic_ns()  # start timer
+
+        #buffer = struct.pack("<i", count)
+        # 'i' means a single 4 byte int value.
+        # '<' means little endian byte order. this may be optional
+        #print("Sending: {} as struct: {}".format(count, buffer))
         result = nrf.send(buffer)
-        end_timer = time.monotonic_ns()  # end timer
         if not result:
-            print("send() failed or timed out")
+            #print("send() failed or timed out")
+            #print(nrf.what_happened())
+            status.append(False)
         else:
-            print(
-                "Transmission successful! Time to Transmit:",
-                f"{(end_timer - start_timer) / 1000} us. Sent: {payload[0]}"
-            )
-            payload[0] += 0.01
-        #time.sleep(1)
+            #print("send() successful")
+            status.append(True)
+        # print timer results despite transmission success
         count -= 1
+    total_time = time.monotonic() - start
 
+    print('{} successfull transmissions, {} failures, {} bps'.format(sum(status), len(status)-sum(status), size*8*len(status)/total_time))
 
-def slave(timeout=6):
-    """Polls the radio and prints the received value. This method expires
-    after 6 seconds of no received transmission"""
+def rx(nrf, channel, address, count):
+    nrf.open_rx_pipe(0, address)
     nrf.listen = True  # put radio into RX mode and power up
+    nrf.channel = channel
+
+    print('Rx NRF24L01+ started w/ power {}, SPI freq: {} hz'.format(nrf.pa_level, nrf.spi_frequency))
 
     received = []
 
     start_time = None
     start = time.monotonic()
-
-    start_test = time.time()
-    while (time.monotonic() - start) < timeout:
-        if nrf.available():
+    while count and (time.monotonic() - start) < 6:
+        if nrf.update() and nrf.pipe is not None:
             if start_time is None:
                 start_time = time.monotonic()
-            # grab information about the received payload
-            payload_size, pipe_number = (nrf.any(), nrf.pipe)
-            received.append(payload_size)
-            # fetch 1 payload from RX FIFO
-            buffer = nrf.read()  # also clears nrf.irq_dr status flag
-            # expecting a little endian float, thus the format string "<f"
-            # buffer[:4] truncates padded 0s if dynamic payloads are disabled
-            payload[0] = struct.unpack("<f", buffer[:4])[0]
             # print details about the received packet
-            print(f"Received {payload_size} bytes on pipe {pipe_number}: {payload[0]}")
-
+            # fetch 1 payload from RX FIFO
+            received.append(nrf.any())
+            rx = nrf.read()  # also clears nrf.irq_dr status flag
+            # expecting an int, thus the string format '<i'
+            # the rx[:4] is just in case dynamic payloads were disabled
+            #buffer = struct.unpack("<i", rx[:4])  # [:4] truncates padded 0s
+            # print the only item in the resulting tuple from
+            # using `struct.unpack()`
+            #print("Received: {}, Raw: {}".format(buffer[0], rx))
+            #start = time.monotonic()
+            count -= 1
+            # this will listen indefinitely till count == 0
     total_time = time.monotonic() - start_time
-    end_test = time.time()
-    total_time_test = end_test - start_test - timeout
-    print("Total time: ")
-    print(total_time_test)
-    print("Throughput: ")
-    print(throughput_measurement(len(received), np.mean(received) * 8, total_time_test))
-    print(len(received))
-    print(np.mean(received))
 
-    # recommended behavior is to keep in TX mode while idle
-    nrf.listen = False  # put the nRF24L01 is in TX mode
-
-def throughput_measurement(nbr_of_packets, packet_size, total_time):
-    return (packet_size * nbr_of_packets) / (total_time * 1000)
-
-def set_role():
-    """Set the role using stdin stream. Timeout arg for slave() can be
-    specified using a space delimiter (e.g. 'R 10' calls `slave(10)`)
-    """
-    user_input = (
-        input(
-            "*** Enter 'R' for receiver role.\n"
-            "*** Enter 'T' for transmitter role.\n"
-            "*** Enter 'Q' to quit example.\n"
-        )
-        or "?"
-    )
-    user_input = user_input.split()
-    if user_input[0].upper().startswith("R"):
-        slave(*[int(x) for x in user_input[1:2]])
-        return True
-    if user_input[0].upper().startswith("T"):
-        master(*[int(x) for x in user_input[1:2]])
-        return True
-    if user_input[0].upper().startswith("Q"):
-        nrf.power = False
-        return False
-    print(user_input[0], "is an unrecognized input. Please try again.")
-    return set_role()
-
-print("    nRF24L01 Simple test")
+    print('{} received, {} average, {} bps'.format(len(received), np.mean(received), np.sum(received)*8/total_time))
 
 if __name__ == "__main__":
-    try:
-        while set_role():
-            pass  # continue example until 'Q' is entered
-    except KeyboardInterrupt:
-        print(" Keyboard Interrupt detected. Powering down radio...")
-        nrf.power = False
-else:
-    print("    Run slave() on receiver\n    Run master() on transmitter")
+    parser = argparse.ArgumentParser(description='NRF24L01+ test')
+    parser.add_argument('--src', dest='src', type=str, default='me', help='NRF24L01+\'s source address')
+    parser.add_argument('--dst', dest='dst', type=str, default='me', help='NRF24L01+\'s destination address')
+    parser.add_argument('--count', dest='cnt', type=int, default=10, help='Number of transmissions')
+    parser.add_argument('--size', dest='size', type=int, default=32, help='Packet size')
+    parser.add_argument('--txchannel', dest='txchannel', type=int, default=76, help='Tx channel', choices=range(0,125))
+    parser.add_argument('--rxchannel', dest='rxchannel', type=int, default=76, help='Rx channel', choices=range(0,125))
+
+    args = parser.parse_args()
+
+    SPI0['spi'] = busio.SPI(**{x: SPI0[x] for x in ['clock', 'MOSI', 'MISO']})
+    SPI1['spi'] = busio.SPI(**{x: SPI1[x] for x in ['clock', 'MOSI', 'MISO']})
+
+    # initialize the nRF24L01 on the spi bus object
+    # rx_nrf = RF24(**{x: SPI0[x] for x in ['spi', 'csn', 'ce']})
+    # tx_nrf = RF24(**{x: SPI1[x] for x in ['spi', 'csn', 'ce']})
+
+    rx_nrf = RF24(SPI0['spi'], SPI0['csn'], SPI0['ce_pin'])
+    tx_nrf = RF24(SPI1['spi'], SPI1['csn'], SPI1['ce_pin'])
+
+    for nrf in [rx_nrf, tx_nrf]:
+        nrf.data_rate = 1
+        nrf.auto_ack = True
+        #nrf.dynamic_payloads = True
+        nrf.payload_length = 32
+        nrf.crc = True
+        nrf.ack = 1
+        nrf.spi_frequency = 20000000
+
+    rx_process = Process(target=rx, kwargs={'nrf':rx_nrf, 'address':bytes(args.src, 'utf-8'), 'count': args.cnt, 'channel': args.rxchannel})
+    tx_process = Process(target=tx, kwargs={'nrf':tx_nrf, 'address':bytes(args.dst, 'utf-8'), 'count': args.cnt, 'channel': args.txchannel, 'size':args.size})
+
+    rx_process.start()
+    time.sleep(1)
+    tx_process.start()
+
+    tx_process.join()
+    rx_process.join()
