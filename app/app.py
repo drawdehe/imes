@@ -4,6 +4,7 @@ import time
 import struct
 from RF24 import RF24, RF24_PA_LOW
 from tuntap import TunTap
+from multiprocessing import Process
 
 radio = RF24(17, 0)
 payload = [0.0]
@@ -13,21 +14,30 @@ tun = TunTap(nic_type="Tun", nic_name="tun0")
 tun.config(ip="192.168.1.10", mask="255.255.255.0", gateway="192.168.2.2")
 size = 4
 
-def master(count=0):
+def tx(count=0):
     radio.stopListening()
-    while count < 5:
-        buffer = tun.read(size) # Makes the transmission slow right now
+    while count < 20:
+        start_timer = time.monotonic_ns()
+        #buffer = tun.read(size) # Seems to make it slow right now
         buffer = struct.pack("<f", payload[0])
         result = radio.write(buffer)
+        end_timer = time.monotonic_ns()
         if not result:
             print("Transmission failed or timed out")
         else:
-            print("Transmission successful! Sent:", payload[0])
+            print(
+                "Transmission successful! Time to Transmit: "
+                "{} ms. Sent: {}".format(
+                    (end_timer - start_timer) / 1000000,
+                    payload[0]
+                )
+            )
             payload[0] += 0.01
+            buffer = None # Does not seem to make any difference
         count += 1
         #time.sleep(1)
 
-def slave():
+def rx():
     radio.startListening()
     while True:
         has_payload, pipe_number = radio.available_pipe()
@@ -55,5 +65,11 @@ if __name__ == "__main__":
     radio.openWritingPipe(address[radio_number])
     radio.openReadingPipe(1, address[not radio_number])
     radio.payloadSize = len(struct.pack("<f", payload[0]))
-    master()
+    tt = Process(target = tx)
+    #rt = Process(target = rx)
+    time.sleep(1)
+    tt.start()
+    #rt.start()
+    tt.join()
+    #rt.join()
     tun.close()
