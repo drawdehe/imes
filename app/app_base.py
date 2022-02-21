@@ -5,7 +5,7 @@ import struct
 from RF24 import RF24, RF24_PA_LOW
 from tuntap import TunTap
 from multiprocessing import Process
-# import wget
+import wget
 
 payload = [0.0]
 
@@ -16,7 +16,7 @@ size = 4
 
 def tx(count=0):
     radio_one.stopListening()
-    while count < 20:
+    while count < 5:
         start_timer = time.monotonic_ns()
         #buffer = tun.read(size) # Seems to make it slow right now
         buffer = struct.pack("<f", payload[0])
@@ -43,7 +43,7 @@ def rx(timeout=6):
     while (time.monotonic() - start_timer) < timeout:
         has_payload, pipe_number = radio_two.available_pipe()
         if has_payload:
-            buffer = radio.read(radio.payloadSize)
+            buffer = radio_two.read(radio_two.payloadSize)
             tun.write(buffer)
             payload[0] = struct.unpack("<f", buffer[:4])[0]
             print(
@@ -55,14 +55,14 @@ def rx(timeout=6):
             )
             start_timer = time.monotonic()
 
-# def get_image_from_the_internet():
-#     url = "https://cdn.pixabay.com/photo/2020/02/06/09/39/summer-4823612_960_720.jpg"
-#     image = wget.download(url)
-#     return image
+def get_image_from_the_internet():
+    url = "https://cdn.pixabay.com/photo/2020/02/06/09/39/summer-4823612_960_720.jpg"
+    image = wget.download(url)
+    return image
 
-# def transmit_image_to_mobile():
-#     image = get_image_from_the_internet()
-#     return 0
+def transmit_image_to_mobile():
+    image = get_image_from_the_internet()
+    return 0
 
 if __name__ == "__main__":
     radio_number = 0
