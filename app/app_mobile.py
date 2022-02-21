@@ -3,16 +3,15 @@ import argparse
 import time
 import struct
 from RF24 import RF24, RF24_PA_LOW
-# from tuntap import TunTap
-from pytun import TunTapDevice
+from tuntap import TunTap
 from multiprocessing import Process
 
 
 payload = [0.0]
 
-# iface = 'LongGe'
-# tun = TunTap(nic_type="Tun", nic_name="tun0")
-# tun.config(ip="192.168.1.10", mask="255.255.255.0", gateway="192.168.2.2")
+iface = 'LongGe'
+tun = TunTap(nic_type="Tun", nic_name="tun0")
+tun.config(ip="192.168.1.10", mask="255.255.255.0", gateway="192.168.2.2")
 size = 4
 
 def tx(count=0):
