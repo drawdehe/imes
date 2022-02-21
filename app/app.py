@@ -37,9 +37,10 @@ def tx(count=0):
         count += 1
         #time.sleep(1)
 
-def rx():
+def rx(timeout=6):
     radio.startListening()
-    while True:
+    start_timer = time.monotonic()
+    while (time.monotonic() - start_timer) < timeout:
         has_payload, pipe_number = radio.available_pipe()
         if has_payload:
             buffer = radio.read(radio.payloadSize)
@@ -52,6 +53,7 @@ def rx():
                     payload[0]
                 )
             )
+            start_timer = time.monotonic()
 
 def set_role():
     return 0
@@ -65,11 +67,11 @@ if __name__ == "__main__":
     radio.openWritingPipe(address[radio_number])
     radio.openReadingPipe(1, address[not radio_number])
     radio.payloadSize = len(struct.pack("<f", payload[0]))
-    tt = Process(target = tx)
-    #rt = Process(target = rx)
+    #tt = Process(target = tx)
+    rt = Process(target = rx)
     time.sleep(1)
-    tt.start()
-    #rt.start()
-    tt.join()
-    #rt.join()
+    #tt.start()
+    rt.start()
+    #tt.join()
+    rt.join()
     tun.close()
