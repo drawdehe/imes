@@ -7,6 +7,8 @@ from tuntap import TunTap
 from multiprocessing import Process
 
 radio = RF24(17, 0)
+radio2 = RF24(27, 60)
+
 payload = [0.0]
 
 iface = 'LongGe'
@@ -15,12 +17,12 @@ tun.config(ip="192.168.1.10", mask="255.255.255.0", gateway="192.168.2.2")
 size = 4
 
 def tx(count=0):
-    radio.stopListening()
+    radio2.stopListening()
     while count < 20:
         start_timer = time.monotonic_ns()
         #buffer = tun.read(size) # Seems to make it slow right now
         buffer = struct.pack("<f", payload[0])
-        result = radio.write(buffer)
+        result = radio2.write(buffer)
         end_timer = time.monotonic_ns()
         if not result:
             print("Transmission failed or timed out")
@@ -58,20 +60,32 @@ def rx(timeout=6):
 def set_role():
     return 0
 
+
 if __name__ == "__main__":
-    radio_number = 1 # Should probably be 1 for one device and 0 for the other device
+    radio_number = 0 # Should probably be 1 for one device and 0 for the other device
     if not radio.begin():
+        raise RuntimeError("radio hardware is not responding")
+    if not radio2.begin():
         raise RuntimeError("radio hardware is not responding")
     address = [b"1Node", b"2Node"]
     radio.setPALevel(RF24_PA_LOW)
+    radio2.setPALevel(RF24_PA_LOW)
+
     radio.openWritingPipe(address[radio_number])
     radio.openReadingPipe(1, address[not radio_number])
+
+    radio2.openWritingPipe(address[radio_number])
+    radio2.openReadingPipe(1, address[not radio_number])
+
     radio.payloadSize = len(struct.pack("<f", payload[0]))
-    #tt = Process(target = tx)
+    radio2.payloadSize = len(struct.pack("<f", payload[0]))
+
+    tt = Process(target = tx)
     rt = Process(target = rx)
     time.sleep(1)
-    #tt.start()
+    tt.start()
     rt.start()
-    #tt.join()
+    tt.join()
     rt.join()
+
     tun.close()
