@@ -3,22 +3,23 @@ import argparse
 import time
 import struct
 from RF24 import RF24, RF24_PA_LOW
-from tuntap import TunTap
+# from tuntap import TunTap
+from pytun import TunTapDevice
 from multiprocessing import Process
 
 
 payload = [0.0]
 
-iface = 'LongGe'
-tun = TunTap(nic_type="Tun", nic_name="tun0")
-tun.config(ip="192.168.1.10", mask="255.255.255.0", gateway="192.168.2.2")
+# iface = 'LongGe'
+# tun = TunTap(nic_type="Tun", nic_name="tun0")
+# tun.config(ip="192.168.1.10", mask="255.255.255.0", gateway="192.168.2.2")
 size = 4
 
 def tx(count=0):
     radio_one.stopListening()
-    while count < 20:
+    while count < 5:
         start_timer = time.monotonic_ns()
-        #buffer = tun.read(size) # Seems to make it slow right now
+        # buffer = tun.read(size) # Seems to make it slow right now
         buffer = struct.pack("<f", payload[0])
         result = radio_one.write(buffer)
         end_timer = time.monotonic_ns()
@@ -44,7 +45,7 @@ def rx(timeout=6):
         has_payload, pipe_number = radio_two.available_pipe()
         if has_payload:
             buffer = radio_two.read(radio_two.payloadSize)
-            tun.write(buffer)
+            # tun.write(buffer)
             payload[0] = struct.unpack("<f", buffer[:4])[0]
             print(
                 "Received {} bytes on pipe {}: {}".format(
