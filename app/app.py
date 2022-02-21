@@ -17,7 +17,7 @@ tun = TunTap(nic_type="Tun", nic_name="tun0")
 tun.config(ip="192.168.1.10", mask="255.255.255.0", gateway="192.168.2.2")
 size = 4
 
-def tx(tx_radiocount=0):
+def tx(tx_radio, count=0):
     tx_radio.stopListening()
     while count < 20:
         start_timer = time.monotonic_ns()

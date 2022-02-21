@@ -5,10 +5,7 @@ import struct
 from RF24 import RF24, RF24_PA_LOW
 from tuntap import TunTap
 from multiprocessing import Process
-import wget
-
-radio = RF24(17, 0)
-radio2 = RF24(27, 10)
+# import wget
 
 payload = [0.0]
 
@@ -18,12 +15,12 @@ tun.config(ip="192.168.1.10", mask="255.255.255.0", gateway="192.168.2.2")
 size = 4
 
 def tx(count=0):
-    radio2.stopListening()
+    radio_one.stopListening()
     while count < 20:
         start_timer = time.monotonic_ns()
         #buffer = tun.read(size) # Seems to make it slow right now
         buffer = struct.pack("<f", payload[0])
-        result = radio2.write(buffer)
+        result = radio_one.write(buffer)
         end_timer = time.monotonic_ns()
         if not result:
             print("Transmission failed or timed out")
@@ -41,53 +38,51 @@ def tx(count=0):
         #time.sleep(1)
 
 def rx(timeout=6):
-    radio.startListening()
+    radio_two.startListening()
     start_timer = time.monotonic()
     while (time.monotonic() - start_timer) < timeout:
-        has_payload, pipe_number = radio.available_pipe()
+        has_payload, pipe_number = radio_two.available_pipe()
         if has_payload:
             buffer = radio.read(radio.payloadSize)
             tun.write(buffer)
             payload[0] = struct.unpack("<f", buffer[:4])[0]
             print(
                 "Received {} bytes on pipe {}: {}".format(
-                    radio.payloadSize,
+                    radio_two.payloadSize,
                     pipe_number,
                     payload[0]
                 )
             )
             start_timer = time.monotonic()
 
-def get_image_from_the_internet():
-    url = "https://cdn.pixabay.com/photo/2020/02/06/09/39/summer-4823612_960_720.jpg"
-    image = wget.download(url)
-    return image
+# def get_image_from_the_internet():
+#     url = "https://cdn.pixabay.com/photo/2020/02/06/09/39/summer-4823612_960_720.jpg"
+#     image = wget.download(url)
+#     return image
 
-def transmit_image_to_mobile():
-    image = get_image_from_the_internet()
-    return 0
+# def transmit_image_to_mobile():
+#     image = get_image_from_the_internet()
+#     return 0
 
 if __name__ == "__main__":
-    radio_number = 1 # Should probably be 1 for one device and 0 for the other device
-    if not radio.begin():
-        raise RuntimeError("radio hardware is not responding")
-    if not radio2.begin():
-        raise RuntimeError("radio hardware is not responding")
+    radio_number = 0
     address = [b"1Node", b"2Node"]
-    radio.setPALevel(RF24_PA_LOW)
-    radio2.setPALevel(RF24_PA_LOW)
 
-    radio.setChannel(77)
-    radio2.setChannel(76)
+    # Transmitter radio
+    radio_one = RF24(27, 10)
+    if not radio_one.begin():
+        raise RuntimeError("radio_one hardware is not responding")
+    radio_one.setPALevel(RF24_PA_LOW)
+    radio_one.setChannel(77)
+    radio_one.openWritingPipe(address[radio_number])
 
-    radio.openWritingPipe(address[radio_number])
-    radio.openReadingPipe(1, address[not radio_number])
-
-    radio2.openWritingPipe(address[radio_number])
-    radio2.openReadingPipe(1, address[not radio_number])
-
-    radio.payloadSize = len(struct.pack("<f", payload[0]))
-    radio2.payloadSize = len(struct.pack("<f", payload[0]))
+    # Receiver radio
+    radio_two = RF24(17, 0)
+    if not radio_two.begin():
+        raise RuntimeError("radio_two hardware is not responding")
+    radio_two.setPALevel(RF24_PA_LOW)
+    radio_two.setChannel(76)      
+    radio_two.openReadingPipe(0,address[radio_number])
 
     tt = Process(target = tx)
     rt = Process(target = rx)

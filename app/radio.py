@@ -26,6 +26,12 @@ class Radio():
             raise RuntimeError("radio_two hardware is not responding")
         radio_two.setPALevel(RF24_PA_LOW)
         radio_two.setChannel(rx_channel)      
-        radio_two.openReadingPipe(address[radio_number])
+        radio_two.openReadingPipe(0,address[radio_number])
+    
+    def stopListening(self):
+        self.radio_one.stopListening()
+    
+    def startListening(self):
+        self.radio_two.startListening()
 
 
