@@ -10,12 +10,12 @@ import wget
 iface = 'LongGe'
 tun = TunTap(nic_type="Tun", nic_name="tun0")
 tun.config(ip="192.168.1.10", mask="255.255.255.0")
-size = 4
+size = 2 ** 16 - 1
 
 def tx(count=0):
     radio_tx.stopListening()
-    while count < 10:
-        time.sleep(1)
+    while count < 4:
+        #time.sleep(1)
         start_timer = time.monotonic_ns()
         buffer = tun.read(size)
         result = radio_tx.write(buffer)
@@ -79,11 +79,11 @@ if __name__ == "__main__":
     radio_rx.openReadingPipe(0,address[radio_number])
 
     tt = Process(target = tx)
-    #rt = Process(target = rx)
+    rt = Process(target = rx)
     time.sleep(1)
     tt.start()
-    #rt.start()
+    rt.start()
     tt.join()
-    #rt.join()
+    rt.join()
 
     tun.close()
