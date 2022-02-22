@@ -15,12 +15,12 @@ tun.config(ip="192.168.1.10", mask="255.255.255.0", gateway="192.168.2.2")
 size = 4
 
 def tx(count=0):
-    radio_one.stopListening()
+    radio_tx.stopListening()
     while count < 5:
         start_timer = time.monotonic_ns()
         #buffer = tun.read(size) # Seems to make it slow right now
         buffer = struct.pack("<f", payload[0])
-        result = radio_one.write(buffer)
+        result = radio_tx.write(buffer)
         end_timer = time.monotonic_ns()
         if not result:
             print("Transmission failed or timed out")
@@ -38,17 +38,17 @@ def tx(count=0):
         #time.sleep(1)
 
 def rx(timeout=6):
-    radio_two.startListening()
+    radio_rx.startListening()
     start_timer = time.monotonic()
     while (time.monotonic() - start_timer) < timeout:
-        has_payload, pipe_number = radio_two.available_pipe()
+        has_payload, pipe_number = radio_rx.available_pipe()
         if has_payload:
-            buffer = radio_two.read(radio_two.payloadSize)
+            buffer = radio_rx.read(radio_rx.payloadSize)
             tun.write(buffer)
             payload[0] = struct.unpack("<f", buffer[:4])[0]
             print(
                 "Received {} bytes on pipe {}: {}".format(
-                    radio_two.payloadSize,
+                    radio_rx.payloadSize,
                     pipe_number,
                     payload[0]
                 )
@@ -69,20 +69,20 @@ if __name__ == "__main__":
     address = [b"1Node", b"2Node"]
 
     # Transmitter radio
-    radio_one = RF24(27, 10)
-    if not radio_one.begin():
-        raise RuntimeError("radio_one hardware is not responding")
-    radio_one.setPALevel(RF24_PA_LOW)
-    radio_one.setChannel(77)
-    radio_one.openWritingPipe(address[radio_number])
+    radio_tx = RF24(27, 10)
+    if not radio_tx.begin():
+        raise RuntimeError("radio_tx hardware is not responding")
+    radio_tx.setPALevel(RF24_PA_LOW)
+    radio_tx.setChannel(77)
+    radio_tx.openWritingPipe(address[radio_number])
 
     # Receiver radio
-    radio_two = RF24(17, 0)
-    if not radio_two.begin():
-        raise RuntimeError("radio_two hardware is not responding")
-    radio_two.setPALevel(RF24_PA_LOW)
-    radio_two.setChannel(76)      
-    radio_two.openReadingPipe(0,address[radio_number])
+    radio_rx = RF24(17, 0)
+    if not radio_rx.begin():
+        raise RuntimeError("radio_rx hardware is not responding")
+    radio_rx.setPALevel(RF24_PA_LOW)
+    radio_rx.setChannel(76)      
+    radio_rx.openReadingPipe(0,address[radio_number])
 
     tt = Process(target = tx)
     rt = Process(target = rx)
