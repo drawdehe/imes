@@ -7,19 +7,17 @@ from tuntap import TunTap
 from multiprocessing import Process
 import wget
 
-payload = [0.0]
-
 iface = 'LongGe'
 tun = TunTap(nic_type="Tun", nic_name="tun0")
-tun.config(ip="192.168.1.10", mask="255.255.255.0", gateway="192.168.2.2")
+tun.config(ip="192.168.1.10", mask="255.255.255.0")
 size = 4
 
 def tx(count=0):
     radio_tx.stopListening()
-    while count < 5:
+    while count < 10:
+        time.sleep(1)
         start_timer = time.monotonic_ns()
-        #buffer = tun.read(size) # Seems to make it slow right now
-        buffer = struct.pack("<f", payload[0])
+        buffer = tun.read(size)
         result = radio_tx.write(buffer)
         end_timer = time.monotonic_ns()
         if not result:
@@ -29,13 +27,10 @@ def tx(count=0):
                 "Transmission successful! Time to Transmit: "
                 "{} ms. Sent: {}".format(
                     (end_timer - start_timer) / 1000000,
-                    payload[0]
+                    buffer
                 )
             )
-            payload[0] += 0.01
-            buffer = None # Does not seem to make any difference
         count += 1
-        #time.sleep(1)
 
 def rx(timeout=6):
     radio_rx.startListening()
@@ -45,12 +40,11 @@ def rx(timeout=6):
         if has_payload:
             buffer = radio_rx.read(radio_rx.payloadSize)
             tun.write(buffer)
-            payload[0] = struct.unpack("<f", buffer[:4])[0]
             print(
                 "Received {} bytes on pipe {}: {}".format(
                     radio_rx.payloadSize,
                     pipe_number,
-                    payload[0]
+                    buffer
                 )
             )
             start_timer = time.monotonic()
@@ -85,11 +79,11 @@ if __name__ == "__main__":
     radio_rx.openReadingPipe(0,address[radio_number])
 
     tt = Process(target = tx)
-    rt = Process(target = rx)
+    #rt = Process(target = rx)
     time.sleep(1)
     tt.start()
-    rt.start()
+    #rt.start()
     tt.join()
-    rt.join()
+    #rt.join()
 
     tun.close()
