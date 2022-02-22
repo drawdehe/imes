@@ -7,37 +7,39 @@ from tuntap import TunTap
 from multiprocessing import Process
 
 
-payload = [0.0]
+# payload = [0.0]
 
 iface = 'LongGe'
 tun = TunTap(nic_type="Tun", nic_name="tun0")
 tun.config(ip="192.168.1.16", mask="255.255.255.0")
-size = 4
+size = 2 ** 16 - 1
 
 def tx(count=0):
     radio_tx.stopListening()
-    while count < 5:
+    while count < 4:        
         start_timer = time.monotonic_ns()
         buffer = tun.read(size) # Seems to make it slow right now
+        # print(buffer)
         # buffer = struct.pack("<f", payload[0])
         result = radio_tx.write(buffer)
         end_timer = time.monotonic_ns()
         if not result:
             print("Transmission failed or timed out")
         else:
-            print(
-                "Transmission successful! Time to Transmit: "
-                "{} ms. Sent: {}".format(
-                    (end_timer - start_timer) / 1000000,
-                    buffer
-                )
-            )
-            payload[0] += 0.01
+            # print(
+            #     "Transmission successful! Time to Transmit: "
+            #     "{} ms. Sent: {}".format(
+            #         (end_timer - start_timer) / 1000000,
+            #         buffer
+            #     )
+            # )
+            # payload[0] += 0.01
             # buffer = None # Does not seem to make any difference
+            print("Transmission successful")
         count += 1
-        #time.sleep(1)
+        time.sleep(1)
 
-def rx(timeout=6):
+def rx(timeout=10):
     radio_rx.startListening()
     start_timer = time.monotonic()
     while (time.monotonic() - start_timer) < timeout:
@@ -81,12 +83,12 @@ if __name__ == "__main__":
     radio_rx.setChannel(77)      
     radio_rx.openReadingPipe(0,address[radio_number])
 
-    # tt = Process(target = tx)
+    tt = Process(target = tx)
     rt = Process(target = rx)
     time.sleep(1)
-    # tt.start()
+    tt.start()
     rt.start()
-    # tt.join()
+    tt.join()
     rt.join()
 
-    # tun.close()
+    tun.close()
