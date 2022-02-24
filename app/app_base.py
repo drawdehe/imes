@@ -14,7 +14,7 @@ size = 2 ** 16 - 1
 
 def tx(count=0):
     radio_tx.stopListening()
-    while count < 4:
+    while count < 10:
         #time.sleep(1)
         start_timer = time.monotonic_ns()
         buffer = tun.read(size)
@@ -76,14 +76,21 @@ if __name__ == "__main__":
         raise RuntimeError("radio_rx hardware is not responding")
     radio_rx.setPALevel(RF24_PA_LOW)
     radio_rx.setChannel(76)      
-    radio_rx.openReadingPipe(0,address[radio_number])
+    radio_rx.openReadingPipe(0, address[radio_number])
 
-    tt = Process(target = tx)
-    rt = Process(target = rx)
-    time.sleep(1)
-    tt.start()
-    rt.start()
-    tt.join()
-    rt.join()
-
+    try:
+        tt = Process(target = tx)
+        rt = Process(target = rx)
+        time.sleep(1)
+        tt.start()
+        rt.start()
+        tt.join()
+        rt.join()
+    except KeyboardInterrupt:
+        print("Keyboard Interrupt detected. Exiting...")
+        radio_tx.powerDown()
+        radio_rx.powerDown()
+        tun.close()
+        sys.exit()
+    print("Program exiting.")
     tun.close()
