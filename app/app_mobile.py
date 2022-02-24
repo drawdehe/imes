@@ -12,11 +12,11 @@ from multiprocessing import Process
 iface = 'LongGe'
 tun = TunTap(nic_type="Tun", nic_name="tun0")
 tun.config(ip="192.168.1.16", mask="255.255.255.0")
-size = 2 ** 16 - 1
+size = 100
 
 def tx(count=0):
     radio_tx.stopListening()
-    while count < 4:        
+    while count < 20:        
         start_timer = time.monotonic_ns()
         buffer = tun.read(size) # Seems to make it slow right now
         # print(buffer)
@@ -39,7 +39,7 @@ def tx(count=0):
         count += 1
         time.sleep(1)
 
-def rx(timeout=10):
+def rx(timeout=6):
     radio_rx.startListening()
     start_timer = time.monotonic()
     while (time.monotonic() - start_timer) < timeout:
@@ -83,12 +83,19 @@ if __name__ == "__main__":
     radio_rx.setChannel(77)      
     radio_rx.openReadingPipe(0,address[radio_number])
 
-    tt = Process(target = tx)
-    rt = Process(target = rx)
-    time.sleep(1)
-    tt.start()
-    rt.start()
-    tt.join()
-    rt.join()
-
+    try:
+        tt = Process(target = tx)
+        rt = Process(target = rx)
+        time.sleep(1)
+        tt.start()
+        rt.start()
+        tt.join()
+        rt.join()
+    except KeyboardInterrupt:
+        print(" Keyboard Interrupt detected. Exiting...")
+        radio_tx.powerDown()
+        radio_rx.powerDown()
+        tun.close()
+        sys.exit()
+    print("Program exiting.")
     tun.close()
