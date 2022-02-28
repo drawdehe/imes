@@ -10,7 +10,7 @@ import wget
 iface = 'LongGe'
 tun = TunTap(nic_type="Tun", nic_name="tun0")
 tun.config(ip="192.168.1.10", mask="255.255.255.0")
-size = 2 ** 16 - 1
+size = 2 ** 16 - 1 #
 
 def tx(count=0):
     radio_tx.stopListening()
