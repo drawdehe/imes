@@ -18,17 +18,19 @@ def tx(count=0):
     radio_tx.stopListening()
     while count < 1000:        
         start_timer = time.monotonic_ns()
-        buffer = tun.read(size) # Seems to make it slow right now
+        buffer = tun.read(size) # Might need fragmentation
         # print(buffer)
         # buffer = struct.pack("<f", payload[0])
+
         result = radio_tx.write(buffer)
         end_timer = time.monotonic_ns()
         if not result:
             print("Transmission failed or timed out")
         else:
             print(
-                "Transmission successful! Time to Transmit: "
+                "Transmission successful! Size: {}. Time to Transmit: "
                 "{} ms. Sent: {}".format(
+                    len(buffer),
                     (end_timer - start_timer) / 1000000,
                     buffer
                 )
@@ -38,6 +40,12 @@ def tx(count=0):
             # print("Transmission successful")
         count += 1
         time.sleep(1)
+
+def fragment(packet):
+    # TODO
+    # Kopiera header, lägg till fragflag och frag offset, dividera upp payload
+    # returnera array
+    return 
 
 def rx(timeout=20):
     radio_rx.startListening()
@@ -77,7 +85,8 @@ if __name__ == "__main__":
     radio_tx.setAddressWidth(3)
     radio_tx.setDataRate(RF24_250KBPS)
     radio_tx.setAutoAck(False)
-    radio_tx.enableDynamicPayloads()
+    radio_tx.disableDynamicPayloads()
+    radio_tx.setPayloadSize(84)
     radio_tx.setCRCLength(RF24_CRC_DISABLED)
 
     # Receiver radio
@@ -90,7 +99,8 @@ if __name__ == "__main__":
     radio_rx.setAddressWidth(3)
     radio_rx.setDataRate(RF24_250KBPS)
     radio_rx.setAutoAck(False)
-    radio_rx.enableDynamicPayloads()
+    radio_rx.disableDynamicPayloads()
+    radio_rx.setPayloadSize(84)
     radio_rx.setCRCLength(RF24_CRC_DISABLED)
 
     try:
