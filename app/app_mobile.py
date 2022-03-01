@@ -2,7 +2,7 @@ import sys
 import argparse
 import time
 import struct
-from RF24 import RF24, RF24_PA_LOW
+from RF24 import RF24, RF24_PA_LOW, RF24_2MBPS, RF24_CRC_8, RF24_CRC_DISABLED, RF24_250KBPS
 from tuntap import TunTap
 from multiprocessing import Process
 
@@ -12,11 +12,11 @@ from multiprocessing import Process
 iface = 'LongGe'
 tun = TunTap(nic_type="Tun", nic_name="tun0")
 tun.config(ip="192.168.1.16", mask="255.255.255.0")
-size = 100
+size = 2**16-1
 
 def tx(count=0):
     radio_tx.stopListening()
-    while count < 20:        
+    while count < 1000:        
         start_timer = time.monotonic_ns()
         buffer = tun.read(size) # Seems to make it slow right now
         # print(buffer)
@@ -26,20 +26,20 @@ def tx(count=0):
         if not result:
             print("Transmission failed or timed out")
         else:
-            # print(
-            #     "Transmission successful! Time to Transmit: "
-            #     "{} ms. Sent: {}".format(
-            #         (end_timer - start_timer) / 1000000,
-            #         buffer
-            #     )
-            # )
+            print(
+                "Transmission successful! Time to Transmit: "
+                "{} ms. Sent: {}".format(
+                    (end_timer - start_timer) / 1000000,
+                    buffer
+                )
+            )
             # payload[0] += 0.01
             # buffer = None # Does not seem to make any difference
-            print("Transmission successful")
+            # print("Transmission successful")
         count += 1
         time.sleep(1)
 
-def rx(timeout=6):
+def rx(timeout=20):
     radio_rx.startListening()
     start_timer = time.monotonic()
     while (time.monotonic() - start_timer) < timeout:
@@ -68,20 +68,30 @@ if __name__ == "__main__":
     address = [b"1Node", b"2Node"]
 
     # Transmitter radio
-    radio_tx = RF24(17, 0)
+    radio_tx = RF24(17, 0, 4000000)
     if not radio_tx.begin():
         raise RuntimeError("radio_tx hardware is not responding")
     radio_tx.setPALevel(RF24_PA_LOW)
     radio_tx.setChannel(76)
     radio_tx.openWritingPipe(address[radio_number])
+    radio_tx.setAddressWidth(3)
+    radio_tx.setDataRate(RF24_250KBPS)
+    radio_tx.setAutoAck(False)
+    radio_tx.enableDynamicPayloads()
+    radio_tx.setCRCLength(RF24_CRC_DISABLED)
 
     # Receiver radio
-    radio_rx = RF24(27, 10)
+    radio_rx = RF24(27, 10, 4000000)
     if not radio_rx.begin():
         raise RuntimeError("radio_rx hardware is not responding")
     radio_rx.setPALevel(RF24_PA_LOW)
     radio_rx.setChannel(77)      
     radio_rx.openReadingPipe(0,address[radio_number])
+    radio_rx.setAddressWidth(3)
+    radio_rx.setDataRate(RF24_250KBPS)
+    radio_rx.setAutoAck(False)
+    radio_rx.enableDynamicPayloads()
+    radio_rx.setCRCLength(RF24_CRC_DISABLED)
 
     try:
         tt = Process(target = tx)
