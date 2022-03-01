@@ -6,30 +6,33 @@ from RF24 import RF24, RF24_PA_LOW, RF24_2MBPS, RF24_250KBPS, RF24_CRC_8, RF24_C
 from tuntap import TunTap
 from multiprocessing import Process
 import wget
+import scapy.all as scapy
 
 iface = 'LongGe'
 tun = TunTap(nic_type="Tun", nic_name="tun0")
 tun.config(ip="192.168.1.10", mask="255.255.255.0")
-size = 19 #
+tx_size = 2 ** 16 - 1
+rx_size = 32
 
 def tx(count=0):
     radio_tx.stopListening()
     while count < 20:
-        #time.sleep(1)
-        start_timer = time.monotonic_ns()
-        buffer = tun.read(size)
-        result = radio_tx.write(buffer)
-        end_timer = time.monotonic_ns()
-        if not result:
-            print("Transmission failed or timed out")
-        else:
-            print(
-                "Transmission successful! Time to Transmit: "
-                "{} ms. Sent: {}".format(
-                    (end_timer - start_timer) / 1000000,
-                    buffer
+        buffer = tun.read(tx_size)
+        fragments = fragmentation(buffer, fragsize=rx_size)
+        for fragment in fragments:
+            start_timer = time.monotonic_ns()
+            result = radio_tx.write(fragment)
+            end_timer = time.monotonic_ns()
+            if not result:
+                print("Transmission failed or timed out")
+            else:
+                print(
+                    "Transmission successful! Time to Transmit: "
+                    "{} ms. Sent: {}".format(
+                        (end_timer - start_timer) / 1000000,
+                        fragment
+                    )
                 )
-            )
         count += 1
 
 def rx(timeout=100):
@@ -38,20 +41,25 @@ def rx(timeout=100):
     while (time.monotonic() - start_timer) < timeout:
         has_payload, pipe_number = radio_rx.available_pipe()
         if has_payload:
-            buffer = radio_rx.read(size)
+            buffer = radio_rx.read(rx_size)
             tun.write(buffer)
-            #test = struct.unpack("<f", buffer[:4])[0]
             print(
-                "Received {} bytes on pipe {}: {}".format(
+                "Received {} bytes on pipe {}: {}, buffer len: {}".format(
                     radio_rx.payloadSize,
                     pipe_number,
-                    buffer
+                    buffer,
+                    len(buffer)
                 )
             )
             start_timer = time.monotonic()
 
-def fragmentation():
-    
+def fragmentation(packet, fragsize=1480):
+    fragments = []
+    for fragment in packet:
+        print("Test")
+    return fragments
+
+#def defragmentation(packets):
 
 def get_image_from_the_internet():
     url = "https://cdn.pixabay.com/photo/2020/02/06/09/39/summer-4823612_960_720.jpg"
@@ -76,7 +84,8 @@ if __name__ == "__main__":
     radio_tx.setAddressWidth(3)
     radio_tx.setDataRate(RF24_250KBPS)
     radio_tx.setAutoAck(False)
-    radio_tx.enableDynamicPayloads()
+    radio_tx.disableDynamicPayloads()
+    radio_tx.setPayloadSize(32)
     radio_tx.setCRCLength(RF24_CRC_DISABLED)
 
     # Receiver radio
@@ -89,7 +98,8 @@ if __name__ == "__main__":
     radio_rx.setAddressWidth(3)
     radio_rx.setDataRate(RF24_250KBPS)
     radio_rx.setAutoAck(False)
-    radio_rx.enableDynamicPayloads()
+    radio_rx.disableDynamicPayloads()
+    radio_rx.setPayloadSize(32)
     radio_rx.setCRCLength(RF24_CRC_DISABLED)
 
     try:
