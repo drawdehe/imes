@@ -104,12 +104,12 @@ if __name__ == "__main__":
     radio_rx.setCRCLength(RF24_CRC_DISABLED)
 
     try:
-        tt = Process(target = tx)
+       # tt = Process(target = tx)
         rt = Process(target = rx)
         time.sleep(1)
-        tt.start()
+       # tt.start()
         rt.start()
-        tt.join()
+       # tt.join()
         rt.join()
     except KeyboardInterrupt:
         print(" Keyboard Interrupt detected. Exiting...")
