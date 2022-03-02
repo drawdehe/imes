@@ -6,34 +6,70 @@ from RF24 import RF24, RF24_PA_LOW, RF24_2MBPS, RF24_250KBPS, RF24_CRC_8, RF24_C
 from tuntap import TunTap
 from multiprocessing import Process
 import wget
-import scapy.all as scapy
+#import scapy.all as scapy
+from scapy.all import *
 
 iface = 'LongGe'
 tun = TunTap(nic_type="Tun", nic_name="tun0")
 tun.config(ip="192.168.1.10", mask="255.255.255.0")
 tx_size = 2 ** 16 - 1
 rx_size = 32
+url = 'https://cdn.pixabay.com/photo/2020/02/06/09/39/summer-4823612_960_720.jpg'
 
 def tx(count=0):
     radio_tx.stopListening()
-    while count < 20:
-        buffer = tun.read(tx_size)
-        fragments = fragmentation(buffer, fragsize=rx_size)
-        for fragment in fragments:
-            start_timer = time.monotonic_ns()
-            result = radio_tx.write(fragment)
-            end_timer = time.monotonic_ns()
-            if not result:
-                print("Transmission failed or timed out")
-            else:
-                print(
-                    "Transmission successful! Time to Transmit: "
-                    "{} ms. Sent: {}".format(
-                        (end_timer - start_timer) / 1000000,
-                        fragment
-                    )
+    while count < 100:
+        packet = tun.read(tx_size)
+        #print("bufffff: ", packet)
+        #print("sizzeee: ", sys.getsizeof(packet))
+        #print("byyytes hex: ", bytes_hex(packet))
+        packet = bytes_hex(packet)
+
+        # Fragmentation
+
+        print("IP version: ", packet[0:1].hex()[1])
+
+        if packet[0:1].hex()[1] == '4':
+            print("it is IPv4")
+            print("ihl: ", packet[1:2].hex()[1])
+            ihl = packet[1:2].hex()[1]
+            ihl = int(ihl)
+            header = packet[0:ihl*8]
+            print("header: ", header)
+            print("header size: ", sys.getsizeof(header)) # should probably be 20
+
+            payload = packet[ihl*8:]
+            print("payload: ", payload)
+            print("type payload: ", type(payload))
+
+            print("FRAGFLAGS AND OFFSET", packet[12:16])
+
+            fragments = []
+            #count = 0
+            while sys.getsizeof(payload) > 0:
+                print("payload size: ", sys.getsizeof(payload), "bytes")
+                if(sys.getsizeof(payload) < 64):
+                    #add header
+                    fragments.append(payload[:])
+                    break
+                else:
+                    fragments.append(payload[:64])
+                    payload = payload[64:]
+
+        start_timer = time.monotonic_ns()
+        result = radio_tx.write(packet)
+        end_timer = time.monotonic_ns()
+        if not result:
+            print("Transmission failed or timed out")
+        else:
+            print(
+                "Transmission successful! Time to Transmit: "
+                "{} ms. Sent: {}".format(
+                    (end_timer - start_timer) / 1000000,
+                    packet
                 )
-        count += 1
+            )
+    count += 1
 
 def rx(timeout=100):
     radio_rx.startListening()
@@ -52,12 +88,6 @@ def rx(timeout=100):
                 )
             )
             start_timer = time.monotonic()
-
-def fragmentation(packet, fragsize=1480):
-    fragments = []
-    for fragment in packet:
-        print("Test")
-    return fragments
 
 #def defragmentation(packets):
 
@@ -104,12 +134,12 @@ if __name__ == "__main__":
 
     try:
         tt = Process(target = tx)
-        rt = Process(target = rx)
+        #rt = Process(target = rx)
         time.sleep(1)
         tt.start()
-        rt.start()
+        #rt.start()
         tt.join()
-        rt.join()
+        #rt.join()
     except KeyboardInterrupt:
         print("Keyboard Interrupt detected. Exiting...")
         radio_tx.powerDown()
