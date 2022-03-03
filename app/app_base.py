@@ -20,41 +20,60 @@ def tx(count=0):
     radio_tx.stopListening()
     while count < 100:
         packet = tun.read(tx_size)
-        #print("bufffff: ", packet)
-        #print("sizzeee: ", sys.getsizeof(packet))
-        #print("byyytes hex: ", bytes_hex(packet))
         packet = bytes_hex(packet)
 
         # Fragmentation
 
-        print("IP version: ", packet[0:1].hex()[1])
-
-        if packet[0:1].hex()[1] == '4':
-            print("it is IPv4")
-            print("ihl: ", packet[1:2].hex()[1])
+        if packet[0:1].hex()[1] == '4': # IPv4
             ihl = packet[1:2].hex()[1]
             ihl = int(ihl)
             header = packet[0:ihl*8]
-            print("header: ", header)
-            print("header size: ", sys.getsizeof(header)) # should probably be 20
-
-            payload = packet[ihl*8:]
-            print("payload: ", payload)
-            print("type payload: ", type(payload))
-
-            print("FRAGFLAGS AND OFFSET", packet[12:16])
-
+            print("Header: ", header)
+            payload = packet[ihl*8:]       
+            
             fragments = []
-            #count = 0
+            count = 0
+            max_payload_size = 12 #in bytes
+            print("Payload before split: ", payload)
             while sys.getsizeof(payload) > 0:
-                print("payload size: ", sys.getsizeof(payload), "bytes")
-                if(sys.getsizeof(payload) < 64):
-                    #add header
+                print("\nFragment no.", count+1)
+                if(sys.getsizeof(payload) <= max_payload_size*2): 
+                    # Add header w/ offset + no more fragments
                     fragments.append(payload[:])
+                    payload = 0
                     break
                 else:
-                    fragments.append(payload[:64])
-                    payload = payload[64:]
+                    # Add header w/ or without offset + more fragments
+                    temp = list(header)
+
+                    # Set more fragments flag
+                    temp[12] = 50
+
+                    # Offset field
+
+                    offset = count * max_payload_size # payload is 12
+                    offset_hex = hex(offset)
+                    zoffset_hex = offset_hex[2:].zfill(3)
+
+                    # Convert new header to bytes, append fragmented payload
+
+                    new_header = bytes(temp)
+
+                    first_part_header = new_header[:13]
+                    last_part_header = new_header[16:]
+
+                    final_header = first_part_header + bytes(zoffset_hex, 'utf-8') + last_part_header
+                    print("Final header:  ", final_header)
+
+                    fragment = final_header + payload[:max_payload_size*2]
+                    fragments.append(fragment)
+                    print("Final fragment:", fragment)
+
+                    payload = payload[max_payload_size*2:]
+                count = count + 1
+
+        #for fragment in fragments:
+         #   radio_tx.write(fragment)
 
         start_timer = time.monotonic_ns()
         result = radio_tx.write(packet)
