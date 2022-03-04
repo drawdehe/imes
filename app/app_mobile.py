@@ -5,6 +5,7 @@ import struct
 from RF24 import RF24, RF24_PA_LOW, RF24_2MBPS, RF24_CRC_8, RF24_CRC_DISABLED, RF24_250KBPS
 from tuntap import TunTap
 from multiprocessing import Process
+from scapy.all import *
 
 
 # payload = [0.0]
@@ -42,23 +43,98 @@ def tx(count=0):
         time.sleep(1)
 
 def fragment(packet):
-    # TODO
-    # Kopiera header, lägg till fragflag och frag offset, dividera upp payload
-    # returnera array
-    return 
+    fragments = []
+
+    if packet[0:1].hex()[1] == '4': # IPv4
+        ihl = packet[1:2].hex()[1]
+        ihl = int(ihl)
+        header = packet[0:ihl*8]
+        print("Header: ", header)
+        payload = packet[ihl*8:]       
+        
+        nbr_fragments = 0
+        max_payload_size = 12 #in bytes
+        print("Payload before split: ", payload)
+        while len(payload) > 0:
+            print("\nFragment no.", nbr_fragments+1)
+            if(len(payload) <= max_payload_size*2): 
+                # Add header w/ offset + no more fragments
+
+                x = header[:13]
+                y = header[16:]
+
+                o = nbr_fragments * max_payload_size # payload is 12
+                o_hex = hex(o)
+                z_o_hex = o_hex[2:].zfill(3)
+
+                h = x + bytes(z_o_hex, 'utf-8') + y
+                f = h + payload[:]
+
+                fragments.append(f)
+                print("Fragment header:\t", h)
+                print("Fragment with payload:\t", f)
+                payload = 0
+                break
+            else:
+                # Add header w/ or without offset + more fragments
+                temp = list(header)
+
+                # Set more fragments flag
+                temp[12] = 50
+
+                # Offset field
+
+                offset = nbr_fragments * max_payload_size # payload is 12
+                offset_hex = hex(offset)
+                zoffset_hex = offset_hex[2:].zfill(3)
+
+                # Convert new header to bytes, append fragmented payload
+
+                new_header = bytes(temp)
+
+                first_part_header = new_header[:13]
+                last_part_header = new_header[16:]
+
+                final_header = first_part_header + bytes(zoffset_hex, 'utf-8') + last_part_header
+                print("Fragment header:\t", final_header)
+
+                fragment = final_header + payload[:max_payload_size*2]
+                fragments.append(fragment)
+                print("Fragment with payload:\t", fragment)
+
+                payload = payload[max_payload_size*2:]
+            nbr_fragments = nbr_fragments + 1
+    return fragments
+
+def defragment(fragment):
+    fragments = []
+    payload = 0
+    #while 
+    # Kolla more fragments
+    # Kolla identification
+    # Spara fragments i en array (?)
+    # Sortera array efter fragment offset
+    # Ta bort headers
+    # Sätt ihop payloads
+    return payload
+ 
 
 def rx(timeout=20):
     radio_rx.startListening()
     start_timer = time.monotonic()
+    print("Max payload size: ", radio_rx.getPayloadSize())
     while (time.monotonic() - start_timer) < timeout:
         has_payload, pipe_number = radio_rx.available_pipe()
         if has_payload:
+            buffer = None
+            print("size of empty buffer: ", sys.getsizeof(buffer))
             buffer = radio_rx.read(radio_rx.payloadSize)
             tun.write(buffer)
-            # payload[0] = struct.unpack("<f", buffer[:4])[0]
+            # payload = struct.unpack("s", buffer[:64])[0]
+            # hexdump(buffer)
             print(
                 "Received {} bytes on pipe {}: {}".format(
-                    radio_rx.payloadSize,
+                    sys.getsizeof(buffer),
                     pipe_number,
                     buffer
                 )
@@ -86,7 +162,7 @@ if __name__ == "__main__":
     radio_tx.setDataRate(RF24_250KBPS)
     radio_tx.setAutoAck(False)
     radio_tx.disableDynamicPayloads()
-    radio_tx.setPayloadSize(84)
+    radio_tx.setPayloadSize(64)
     radio_tx.setCRCLength(RF24_CRC_DISABLED)
 
     # Receiver radio
@@ -100,7 +176,7 @@ if __name__ == "__main__":
     radio_rx.setDataRate(RF24_250KBPS)
     radio_rx.setAutoAck(False)
     radio_rx.disableDynamicPayloads()
-    radio_rx.setPayloadSize(84)
+    radio_rx.setPayloadSize(64)
     radio_rx.setCRCLength(RF24_CRC_DISABLED)
 
     try:
