@@ -34,9 +34,10 @@ def tx(count=0):
             else:
                 print(
                     "Transmission successful! Time to Transmit: "
-                    "{} ms. Sent: {}".format(
+                    "{} ms. Sent: {}. Size: {}".format(
                         (end_timer - start_timer) / 1000000,
-                        f
+                        f,
+                        sys.getsizeof(f)
                     )
                 )
     count += 1
@@ -126,7 +127,7 @@ def fragment(packet):
 def defragment(fragment):
     fragments = []
     payload = 0
-    #while 
+    #while fragment != 4:
     # Kolla more fragments
     # Kolla identification
     # Spara fragments i en array (?)
