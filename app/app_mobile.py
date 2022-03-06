@@ -84,10 +84,6 @@ def rx(timeout=20):
             no_of_fragments = int(buffer[4:8])
             # print("NO OF FRAGMENTS?", no_of_fragments)
             fragments.append(buffer)
-            if len(fragments) == no_of_fragments:
-                pkt = defragment(fragments)
-                tun.write(pkt)
-                fragments = []
             print(
                 "Received {} bytes on pipe {}: {}".format(
                     len(buffer),
@@ -95,6 +91,12 @@ def rx(timeout=20):
                     buffer
                 )
             )
+            if len(fragments) == no_of_fragments:
+                print("fragments: ", fragments)
+                pkt = defragment(fragments)
+                tun.write(pkt)
+                fragments = []
+            
             start_timer = time.monotonic()
 
 def fragments_left(packet):
