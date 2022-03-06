@@ -8,6 +8,7 @@ from multiprocessing import Process
 import wget
 import math
 from scapy.all import *
+import codecs
 
 iface = 'LongGe'
 tun = TunTap(nic_type="Tun", nic_name="tun0")
@@ -17,10 +18,11 @@ url = 'https://cdn.pixabay.com/photo/2020/02/06/09/39/summer-4823612_960_720.jpg
 
 def tx(count=0):
     radio_tx.stopListening()
-    while count < 100:
+    nbr_transmitted = 0
+    while count < 1000:
         packet = tun.read(size)
 
-        print("Packet before fragmentation: ", packet.hex())
+        # print("Packet before fragmentation: ", packet.hex())
 
         # Fragmentation
         fragments = fragment(packet)
@@ -33,14 +35,15 @@ def tx(count=0):
                 print("Transmission failed or timed out")
             else:
                 print(
-                    "Transmission successful! Time to Transmit: "
+                    "Transmission successful! Packet number: {}. Time to Transmit: "
                     "{} ms. Sent: {}. Size: {}".format(
+                        count +1 ,
                         (end_timer - start_timer) / 1000000,
                         f,
-                        sys.getsizeof(f)
+                        len(f)
                     )
                 )
-    count += 1
+        count += 1
 
 def rx(timeout=100):
     radio_rx.startListening()
@@ -53,19 +56,73 @@ def rx(timeout=100):
             no_of_fragments = int(buffer[4:8])
             # print("NO OF FRAGMENTS?", no_of_fragments)
             fragments.append(buffer)
-            print(
-                "Received {} bytes on pipe {}: {}, buffer len: {}".format(
-                    radio_rx.payloadSize,
-                    pipe_number,
-                    buffer,
-                    len(buffer)
-                )
+            
             if len(fragments) == no_of_fragments:
                 pkt = defragment(fragments)
-                tun.write(pkt)
+                print(
+                    "Received {} bytes on pipe {}: {}".format(
+                        len(pkt),
+                        pipe_number,
+                        pkt
+                    )
+                )
+                tun.write(codecs.decode(pkt,"hex")) # codecs.decode() gör om till samma typ av format som när man läser buffern i tx
                 fragments = []
-            )
+            
             start_timer = time.monotonic()
+
+
+
+def fragment(packet):
+    # 4 byte header
+    header_size = 4
+    payload_size = 16 - header_size
+    no_of_fragments = math.ceil(len(packet)/payload_size)
+    fragments = []
+    for nbr in range(no_of_fragments):
+        lower = payload_size * nbr
+        upper = payload_size * (nbr + 1)
+        nbr = nbr + 1
+        header = hex(nbr)[2:].zfill(4) + hex(no_of_fragments)[2:].zfill(4) 
+        fragment_payload = packet[lower:upper]
+        final_fragment = header + fragment_payload.hex()
+        fragments.append(bytes(final_fragment, "utf-8"))
+        # print("Fragment no. {}:\t {}".format(nbr, final_fragment))
+    return fragments
+
+def defragment(fragments):
+    pkt = bytearray(0)
+    for frg in fragments:
+        # print("fragment: ", frg[8:])
+        pkt = pkt + frg[8:]
+    # print("defragmented packet: ", pkt)
+    return bytes(pkt)
+
+
+def get_image_from_the_internet():
+    url = "https://cdn.pixabay.com/photo/2020/02/06/09/39/summer-4823612_960_720.jpg"
+    image = wget.download(url)
+    return image
+
+def transmit_image_to_mobile():
+    image = get_image_from_the_internet()
+    return 0
+
+"""
+def defragment(fragment):
+    if (defragment_buffer == None):
+        defragment_buffer = [None] * total_fragment_nbr
+    fragment_nbr = int(fragment[:4])
+    total_fragment_nbr = int(fragment[4:8])
+    payload = 0
+    defragment_buffer[fragment_nbr - 1] = fragment[8:]
+    if None not in defragment_buffer:
+        for f in defragment_buffer:
+            payload = payload + f
+        defragment_buffer = None
+        print("Payload after defragmentation: ", payload)
+        return payload
+"""
 
 """
 def fragment(packet):
@@ -132,56 +189,6 @@ def fragment(packet):
             nbr_fragments = nbr_fragments + 1
     return fragments
 """
-
-def fragment(packet):
-    # 4 byte header
-    header_size = 4
-    payload_size = 16 - header_size
-    no_of_fragments = math.ceil(len(packet)/payload_size)
-    fragments = []
-    for nbr in range(no_of_fragments):
-        lower = payload_size * nbr
-        upper = payload_size * (nbr + 1)
-        nbr = nbr + 1
-        header = hex(nbr)[2:].zfill(4) + hex(no_of_fragments)[2:].zfill(4) 
-        fragment_payload = packet[lower:upper]
-        final_fragment = header + fragment_payload.hex()
-        fragments.append(bytes(final_fragment, "utf-8"))
-        print("Fragment no. {}:\t {}".format(nbr, final_fragment))
-    return fragments
-
-def defragment(fragments):
-    pkt = bytearray(0)
-    for frg in fragments:
-        print("fragment: ", frg[8:])
-        pkt = pkt + frg[8:]
-    print("defragmented packet: ", pkt)
-    return pkt
-
-"""
-def defragment(fragment):
-    if (defragment_buffer == None):
-        defragment_buffer = [None] * total_fragment_nbr
-    fragment_nbr = int(fragment[:4])
-    total_fragment_nbr = int(fragment[4:8])
-    payload = 0
-    defragment_buffer[fragment_nbr - 1] = fragment[8:]
-    if None not in defragment_buffer:
-        for f in defragment_buffer:
-            payload = payload + f
-        defragment_buffer = None
-        print("Payload after defragmentation: ", payload)
-        return payload
-"""
-
-def get_image_from_the_internet():
-    url = "https://cdn.pixabay.com/photo/2020/02/06/09/39/summer-4823612_960_720.jpg"
-    image = wget.download(url)
-    return image
-
-def transmit_image_to_mobile():
-    image = get_image_from_the_internet()
-    return 0
 
 if __name__ == "__main__":
     defragment_buffer = None
