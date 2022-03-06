@@ -123,9 +123,9 @@ def defragment(fragment):
     return payload
  
 def fragment(packet):
-    # 8 byte header
-    header_size = 8
-    payload_size = 32 - header_size
+    # 4 byte header
+    header_size = 4
+    payload_size = (16 - header_size)
     no_of_fragments = math.ceil(len(packet)/payload_size)
     fragments = []
     for nbr in range(no_of_fragments):
@@ -138,6 +138,9 @@ def fragment(packet):
         fragments.append(bytes(final_fragment, "utf-8"))
         print("Fragment no. {}:\t {}".format(nbr, final_fragment))
     return fragments
+
+def defragment(fragments):
+    return 0
 
 
 def rx(timeout=20):
@@ -201,12 +204,12 @@ if __name__ == "__main__":
     radio_rx.setCRCLength(RF24_CRC_DISABLED)
 
     try:
-        tt = Process(target = tx)
+        # tt = Process(target = tx)
         rt = Process(target = rx)
         time.sleep(1)
-        tt.start()
+        # tt.start()
         rt.start()
-        tt.join()
+        # tt.join()
         rt.join()
     except KeyboardInterrupt:
         print(" Keyboard Interrupt detected. Exiting...")
