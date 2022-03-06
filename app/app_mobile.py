@@ -6,6 +6,7 @@ from RF24 import RF24, RF24_PA_LOW, RF24_2MBPS, RF24_CRC_8, RF24_CRC_DISABLED, R
 from tuntap import TunTap
 from multiprocessing import Process
 from scapy.all import *
+import math
 
 
 # payload = [0.0]
@@ -22,26 +23,27 @@ def tx(count=0):
         buffer = tun.read(size) # Might need fragmentation
         # print(buffer)
         # buffer = struct.pack("<f", payload[0])
-
-        result = radio_tx.write(buffer)
-        end_timer = time.monotonic_ns()
-        if not result:
-            print("Transmission failed or timed out")
-        else:
-            print(
-                "Transmission successful! Size: {}. Time to Transmit: "
-                "{} ms. Sent: {}".format(
-                    len(buffer),
-                    (end_timer - start_timer) / 1000000,
-                    buffer
+        fragments = fragment(buffer)
+        for frag in fragments:
+            result = radio_tx.write(frag)
+            end_timer = time.monotonic_ns()
+            if not result:
+                print("Transmission failed or timed out")
+            else:
+                print(
+                    "Transmission successful! Size: {}. Time to Transmit: "
+                    "{} ms. Sent: {}".format(
+                        len(frag),
+                        (end_timer - start_timer) / 1000000,
+                        frag
+                    )
                 )
-            )
-            # payload[0] += 0.01
-            # buffer = None # Does not seem to make any difference
-            # print("Transmission successful")
+                # payload[0] += 0.01
+                # buffer = None # Does not seem to make any difference
+                # print("Transmission successful")
         count += 1
         time.sleep(1)
-
+"""
 def fragment(packet):
     fragments = []
 
@@ -106,6 +108,8 @@ def fragment(packet):
             nbr_fragments = nbr_fragments + 1
     return fragments
 
+    """
+
 def defragment(fragment):
     fragments = []
     payload = 0
@@ -118,6 +122,23 @@ def defragment(fragment):
     # Sätt ihop payloads
     return payload
  
+def fragment(packet):
+    # 8 byte header
+    header_size = 8
+    payload_size = 32 - header_size
+    no_of_fragments = math.ceil(len(packet)/payload_size)
+    fragments = []
+    for nbr in range(no_of_fragments):
+        lower = payload_size * nbr
+        upper = payload_size * (nbr + 1)
+        nbr = nbr + 1
+        header = hex(nbr)[2:].zfill(4) + hex(no_of_fragments)[2:].zfill(4) 
+        fragment_payload = packet[lower:upper]
+        final_fragment = header + fragment_payload.hex()
+        fragments.append(bytes(final_fragment, "utf-8"))
+        print("Fragment no. {}:\t {}".format(nbr, final_fragment))
+    return fragments
+
 
 def rx(timeout=20):
     radio_rx.startListening()
@@ -180,12 +201,12 @@ if __name__ == "__main__":
     radio_rx.setCRCLength(RF24_CRC_DISABLED)
 
     try:
-       # tt = Process(target = tx)
+        tt = Process(target = tx)
         rt = Process(target = rx)
         time.sleep(1)
-       # tt.start()
+        tt.start()
         rt.start()
-       # tt.join()
+        tt.join()
         rt.join()
     except KeyboardInterrupt:
         print(" Keyboard Interrupt detected. Exiting...")
