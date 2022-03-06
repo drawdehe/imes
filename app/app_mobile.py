@@ -7,6 +7,7 @@ from tuntap import TunTap
 from multiprocessing import Process
 from scapy.all import *
 import math
+import codecs
 
 
 # payload = [0.0]
@@ -21,7 +22,8 @@ def tx(count=0):
     while count < 1000:        
         start_timer = time.monotonic_ns()
         buffer = tun.read(size)
-        print("Packet before fragmentation: ", buffer)
+        # print("Packet before fragmentation: ", buffer, "Type: ", type(buffer))
+        
         fragments = fragment(buffer)
         for frag in fragments:
             result = radio_tx.write(frag)
@@ -41,8 +43,6 @@ def tx(count=0):
                 # buffer = None # Does not seem to make any difference
                 # print("Transmission successful")
         count += 1
-        time.sleep(1)
-
 
  
 def fragment(packet):
@@ -59,23 +59,23 @@ def fragment(packet):
         fragment_payload = packet[lower:upper]
         final_fragment = header + fragment_payload.hex()
         fragments.append(bytes(final_fragment, "utf-8"))
-        print("Fragment no. {}:\t {}".format(nbr, final_fragment))
+        # print("Fragment no. {}:\t {}".format(nbr, final_fragment))
     return fragments
 
 def defragment(fragments):
     pkt = bytearray(0)
     for frg in fragments:
-        print("fragment: ", frg[8:])
+        # print("fragment: ", frg[8:])
         pkt = pkt + frg[8:]
-    print("defragmented packet: ", pkt)
-    return pkt
+    return bytes(pkt)
 
 
-def rx(timeout=20):
+def rx(timeout=100):
     radio_rx.startListening()
     start_timer = time.monotonic()
-    print("Max payload size: ", radio_rx.getPayloadSize())
+    # print("Max payload size: ", radio_rx.getPayloadSize())
     fragments = []
+    nbr_received = 0
     while (time.monotonic() - start_timer) < timeout:
         has_payload, pipe_number = radio_rx.available_pipe()
         
@@ -84,25 +84,31 @@ def rx(timeout=20):
             no_of_fragments = int(buffer[4:8])
             # print("NO OF FRAGMENTS?", no_of_fragments)
             fragments.append(buffer)
-            print(
-                "Received {} bytes on pipe {}: {}".format(
-                    len(buffer),
-                    pipe_number,
-                    buffer
-                )
-            )
+            
             if len(fragments) == no_of_fragments:
-                print("fragments: ", fragments)
+                # print("fragments: ", fragments)
                 pkt = defragment(fragments)
-                tun.write(pkt)
+                print(
+                    "Packet no. {}. Received {} bytes on pipe {}: {}".format(
+                        nbr_received,
+                        math.ceil(len(pkt))/2,
+                        pipe_number,
+                        pkt
+                    )
+                )
+                #format_ip_packet(pkt)
+                tun.write(codecs.decode(pkt, "hex"))
                 fragments = []
+                nbr_received = nbr_received + 1
             
             start_timer = time.monotonic()
 
-def fragments_left(packet):
-    frag_no = packet[:4]
-    no_of_fragments = packet[4:8]
-    return (int(no_of_fragments) != int(frag_no))
+def format_ip_packet(packet):
+    print("Packet formatted:")
+    for i in range(math.ceil(len(packet) / 8)):
+        print(packet[8*i:8*(i+1)])
+    print("{} octets".format(math.ceil(len(packet) / 8)))
+    return
 
 def request_image_from_base():
     return 0
