@@ -6,7 +6,7 @@ from RF24 import RF24, RF24_PA_LOW, RF24_2MBPS, RF24_250KBPS, RF24_CRC_8, RF24_C
 from tuntap import TunTap
 from multiprocessing import Process
 import wget
-#import scapy.all as scapy
+import math
 from scapy.all import *
 
 iface = 'LongGe'
@@ -60,6 +60,7 @@ def rx(timeout=100):
             )
             start_timer = time.monotonic()
 
+"""
 def fragment(packet):
     fragments = []
 
@@ -122,6 +123,24 @@ def fragment(packet):
 
                 payload = payload[max_payload_size*2:]
             nbr_fragments = nbr_fragments + 1
+    return fragments
+"""
+
+def fragment(packet):
+    # 4 byte header
+    header_size = 4
+    payload_size = 16 - header_size
+    no_of_fragments = math.ceil(len(packet)/payload_size)
+    fragments = []
+    for nbr in range(no_of_fragments):
+        lower = payload_size * nbr
+        upper = payload_size * (nbr + 1)
+        nbr = nbr + 1
+        header = hex(nbr)[2:].zfill(4) + hex(no_of_fragments)[2:].zfill(4) 
+        fragment_payload = packet[lower:upper]
+        final_fragment = header + fragment_payload.hex()
+        fragments.append(bytes(final_fragment, "utf-8"))
+        print("Fragment no. {}:\t {}".format(nbr, final_fragment))
     return fragments
 
 def defragment(fragment):
