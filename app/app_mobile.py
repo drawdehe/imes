@@ -20,9 +20,8 @@ def tx(count=0):
     radio_tx.stopListening()
     while count < 1000:        
         start_timer = time.monotonic_ns()
-        buffer = tun.read(size) # Might need fragmentation
-        # print(buffer)
-        # buffer = struct.pack("<f", payload[0])
+        buffer = tun.read(size)
+        print("Packet before fragmentation: ", buffer)
         fragments = fragment(buffer)
         for frag in fragments:
             result = radio_tx.write(frag)
@@ -43,84 +42,8 @@ def tx(count=0):
                 # print("Transmission successful")
         count += 1
         time.sleep(1)
-"""
-def fragment(packet):
-    fragments = []
 
-    if packet[0:1].hex()[1] == '4': # IPv4
-        ihl = packet[1:2].hex()[1]
-        ihl = int(ihl)
-        header = packet[0:ihl*8]
-        print("Header: ", header)
-        payload = packet[ihl*8:]       
-        
-        nbr_fragments = 0
-        max_payload_size = 12 #in bytes
-        print("Payload before split: ", payload)
-        while len(payload) > 0:
-            print("\nFragment no.", nbr_fragments+1)
-            if(len(payload) <= max_payload_size*2): 
-                # Add header w/ offset + no more fragments
 
-                x = header[:13]
-                y = header[16:]
-
-                o = nbr_fragments * max_payload_size # payload is 12
-                o_hex = hex(o)
-                z_o_hex = o_hex[2:].zfill(3)
-
-                h = x + bytes(z_o_hex, 'utf-8') + y
-                f = h + payload[:]
-
-                fragments.append(f)
-                print("Fragment header:\t", h)
-                print("Fragment with payload:\t", f)
-                payload = 0
-                break
-            else:
-                # Add header w/ or without offset + more fragments
-                temp = list(header)
-
-                # Set more fragments flag
-                temp[12] = 50
-
-                # Offset field
-
-                offset = nbr_fragments * max_payload_size # payload is 12
-                offset_hex = hex(offset)
-                zoffset_hex = offset_hex[2:].zfill(3)
-
-                # Convert new header to bytes, append fragmented payload
-
-                new_header = bytes(temp)
-
-                first_part_header = new_header[:13]
-                last_part_header = new_header[16:]
-
-                final_header = first_part_header + bytes(zoffset_hex, 'utf-8') + last_part_header
-                print("Fragment header:\t", final_header)
-
-                fragment = final_header + payload[:max_payload_size*2]
-                fragments.append(fragment)
-                print("Fragment with payload:\t", fragment)
-
-                payload = payload[max_payload_size*2:]
-            nbr_fragments = nbr_fragments + 1
-    return fragments
-
-    """
-
-def defragment(fragment):
-    fragments = []
-    payload = 0
-    #while 
-    # Kolla more fragments
-    # Kolla identification
-    # Spara fragments i en array (?)
-    # Sortera array efter fragment offset
-    # Ta bort headers
-    # Sätt ihop payloads
-    return payload
  
 def fragment(packet):
     # 4 byte header
@@ -140,30 +63,44 @@ def fragment(packet):
     return fragments
 
 def defragment(fragments):
-    return 0
+    pkt = bytearray(0)
+    for frg in fragments:
+        print("fragment: ", frg[8:])
+        pkt = pkt + frg[8:]
+    print("defragmented packet: ", pkt)
+    return pkt
 
 
 def rx(timeout=20):
     radio_rx.startListening()
     start_timer = time.monotonic()
     print("Max payload size: ", radio_rx.getPayloadSize())
+    fragments = []
     while (time.monotonic() - start_timer) < timeout:
         has_payload, pipe_number = radio_rx.available_pipe()
+        
         if has_payload:
-            buffer = None
-            print("size of empty buffer: ", sys.getsizeof(buffer))
             buffer = radio_rx.read(radio_rx.payloadSize)
-            tun.write(buffer)
-            # payload = struct.unpack("s", buffer[:64])[0]
-            # hexdump(buffer)
+            no_of_fragments = int(buffer[4:8])
+            # print("NO OF FRAGMENTS?", no_of_fragments)
+            fragments.append(buffer)
+            if len(fragments) == no_of_fragments:
+                pkt = defragment(fragments)
+                tun.write(pkt)
+                fragments = []
             print(
                 "Received {} bytes on pipe {}: {}".format(
-                    sys.getsizeof(buffer),
+                    len(buffer),
                     pipe_number,
                     buffer
                 )
             )
             start_timer = time.monotonic()
+
+def fragments_left(packet):
+    frag_no = packet[:4]
+    no_of_fragments = packet[4:8]
+    return (int(no_of_fragments) != int(frag_no))
 
 def request_image_from_base():
     return 0
@@ -204,12 +141,12 @@ if __name__ == "__main__":
     radio_rx.setCRCLength(RF24_CRC_DISABLED)
 
     try:
-        # tt = Process(target = tx)
+        tt = Process(target = tx)
         rt = Process(target = rx)
         time.sleep(1)
-        # tt.start()
+        tt.start()
         rt.start()
-        # tt.join()
+        tt.join()
         rt.join()
     except KeyboardInterrupt:
         print(" Keyboard Interrupt detected. Exiting...")
