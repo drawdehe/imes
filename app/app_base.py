@@ -12,15 +12,15 @@ from scapy.all import *
 iface = 'LongGe'
 tun = TunTap(nic_type="Tun", nic_name="tun0")
 tun.config(ip="192.168.1.10", mask="255.255.255.0")
-tx_size = 2 ** 16 - 1
-rx_size = 32
+size = 2 ** 16 - 1
 url = 'https://cdn.pixabay.com/photo/2020/02/06/09/39/summer-4823612_960_720.jpg'
 
 def tx(count=0):
     radio_tx.stopListening()
     while count < 100:
-        packet = tun.read(tx_size)
-        packet = bytes_hex(packet)
+        packet = tun.read(size)
+
+        print("Packet before fragmentation: ", packet.hex())
 
         # Fragmentation
         fragments = fragment(packet)
@@ -45,11 +45,14 @@ def tx(count=0):
 def rx(timeout=100):
     radio_rx.startListening()
     start_timer = time.monotonic()
+    fragments = []
     while (time.monotonic() - start_timer) < timeout:
         has_payload, pipe_number = radio_rx.available_pipe()
         if has_payload:
-            buffer = radio_rx.read(rx_size)
-            tun.write(buffer)
+            buffer = radio_rx.read(size)
+            no_of_fragments = int(buffer[4:8])
+            # print("NO OF FRAGMENTS?", no_of_fragments)
+            fragments.append(buffer)
             print(
                 "Received {} bytes on pipe {}: {}, buffer len: {}".format(
                     radio_rx.payloadSize,
@@ -57,6 +60,10 @@ def rx(timeout=100):
                     buffer,
                     len(buffer)
                 )
+            if len(fragments) == no_of_fragments:
+                pkt = defragment(fragments)
+                tun.write(pkt)
+                fragments = []
             )
             start_timer = time.monotonic()
 
@@ -143,17 +150,29 @@ def fragment(packet):
         print("Fragment no. {}:\t {}".format(nbr, final_fragment))
     return fragments
 
+def defragment(fragments):
+    pkt = bytearray(0)
+    for frg in fragments:
+        print("fragment: ", frg[8:])
+        pkt = pkt + frg[8:]
+    print("defragmented packet: ", pkt)
+    return pkt
+
+"""
 def defragment(fragment):
-    fragments = []
+    if (defragment_buffer == None):
+        defragment_buffer = [None] * total_fragment_nbr
+    fragment_nbr = int(fragment[:4])
+    total_fragment_nbr = int(fragment[4:8])
     payload = 0
-    #while fragment != 4:
-    # Kolla more fragments
-    # Kolla identification
-    # Spara fragments i en array (?)
-    # Sortera array efter fragment offset
-    # Ta bort headers
-    # Sätt ihop payloads
-    return payload
+    defragment_buffer[fragment_nbr - 1] = fragment[8:]
+    if None not in defragment_buffer:
+        for f in defragment_buffer:
+            payload = payload + f
+        defragment_buffer = None
+        print("Payload after defragmentation: ", payload)
+        return payload
+"""
 
 def get_image_from_the_internet():
     url = "https://cdn.pixabay.com/photo/2020/02/06/09/39/summer-4823612_960_720.jpg"
@@ -165,6 +184,7 @@ def transmit_image_to_mobile():
     return 0
 
 if __name__ == "__main__":
+    defragment_buffer = None
     radio_number = 0
     address = [b"1Node", b"2Node"]
 
@@ -198,12 +218,12 @@ if __name__ == "__main__":
 
     try:
         tt = Process(target = tx)
-        #rt = Process(target = rx)
+        rt = Process(target = rx)
         time.sleep(1)
         tt.start()
-        #rt.start()
+        rt.start()
         tt.join()
-        #rt.join()
+        rt.join()
     except KeyboardInterrupt:
         print("Keyboard Interrupt detected. Exiting...")
         radio_tx.powerDown()
