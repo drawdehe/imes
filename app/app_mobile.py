@@ -57,7 +57,7 @@ def fragment(packet):
         nbr = nbr + 1
         header = hex(nbr)[2:].zfill(4) + hex(no_of_fragments)[2:].zfill(4) 
         fragment_payload = packet[lower:upper]
-        final_fragment = header + fragment_payload.hex()
+        final_fragment = (header + fragment_payload.hex()).zfill(32)
         fragments.append(bytes(final_fragment, "utf-8"))
         # print("Fragment no. {}:\t {}".format(nbr, final_fragment))
     return fragments
@@ -84,6 +84,7 @@ def rx(timeout=100):
             no_of_fragments = int(buffer[4:8])
             # print("NO OF FRAGMENTS?", no_of_fragments)
             fragments.append(buffer)
+            # print("Fragment: ", buffer)
             
             if len(fragments) == no_of_fragments:
                 # print("fragments: ", fragments)
@@ -96,7 +97,7 @@ def rx(timeout=100):
                         pkt
                     )
                 )
-                #format_ip_packet(pkt)
+                # format_ip_packet(pkt)
                 tun.write(codecs.decode(pkt, "hex"))
                 fragments = []
                 nbr_received = nbr_received + 1
@@ -133,6 +134,7 @@ if __name__ == "__main__":
     radio_tx.disableDynamicPayloads()
     radio_tx.setPayloadSize(64)
     radio_tx.setCRCLength(RF24_CRC_DISABLED)
+    # radio_tx.printPrettyDetails()
 
     # Receiver radio
     radio_rx = RF24(27, 10, 4000000)
@@ -147,6 +149,7 @@ if __name__ == "__main__":
     radio_rx.disableDynamicPayloads()
     radio_rx.setPayloadSize(64)
     radio_rx.setCRCLength(RF24_CRC_DISABLED)
+    # radio_rx.printPrettyDetails()
 
     try:
         tt = Process(target = tx)
