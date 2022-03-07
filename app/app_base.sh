@@ -5,7 +5,7 @@
 #sudo ip addr add 192.168.1.10/24 dev tun0
 #sudo ip link set dev tun0 up
 
-echo "Clearing routing"
+echo "Clearing router table"
 sudo iptables -P INPUT ACCEPT
 sudo iptables -P FORWARD ACCEPT
 sudo iptables -P OUTPUT ACCEPT
@@ -16,7 +16,7 @@ sudo iptables -t nat -X
 sudo iptables -t mangle -F
 sudo iptables -t mangle -X
 
-echo "Setting up routing"
+echo "Setting up router table"
 sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 sudo iptables -A FORWARD -i eth0 -o tun0 -m state --state RELATED,ESTABLISHED -j ACCEPT
 sudo iptables -A FORWARD -i tun0 -o eth0 -j ACCEPT
