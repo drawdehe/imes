@@ -52,8 +52,9 @@ def rx(timeout=10000):
         has_payload, pipe_number = radio_rx.available_pipe()
         if has_payload:
             buffer = radio_rx.read(size)
-            no_of_fragments = int(buffer[4:8])
-            # print("NO OF FRAGMENTS?", no_of_fragments)
+            print("raw received data:", buffer)
+            no_of_fragments = int(buffer[4:8].zfill(4), 16)
+            print("NO OF FRAGMENTS?", no_of_fragments)
             fragments.append(buffer)
             
             if len(fragments) == no_of_fragments:
@@ -82,7 +83,8 @@ def fragment(packet):
         nbr = nbr + 1
         header = hex(nbr)[2:].zfill(4) + hex(no_of_fragments)[2:].zfill(4) 
         fragment_payload = packet[lower:upper]
-        final_fragment = (header + fragment_payload.hex()).zfill(32)
+        final_fragment = (header + fragment_payload.hex())
+        final_fragment = final_fragment[::-1].zfill(32)[::-1] 
         fragments.append(bytes(final_fragment, "utf-8"))
         # print("Fragment no. {}:\t {}".format(nbr, final_fragment))
     return fragments
