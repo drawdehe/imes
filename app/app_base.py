@@ -14,7 +14,6 @@ iface = 'LongGe'
 tun = TunTap(nic_type="Tun", nic_name="tun0")
 tun.config(ip="192.168.1.10", mask="255.255.255.0")
 size = 2 ** 16 - 1
-url = 'https://cdn.pixabay.com/photo/2020/02/06/09/39/summer-4823612_960_720.jpg'
 
 def tx(count=0):
     radio_tx.stopListening()
@@ -45,7 +44,7 @@ def tx(count=0):
                 )
         count += 1
 
-def rx(timeout=100):
+def rx(timeout=10000):
     radio_rx.startListening()
     start_timer = time.monotonic()
     fragments = []
@@ -71,8 +70,6 @@ def rx(timeout=100):
             
             start_timer = time.monotonic()
 
-
-
 def fragment(packet):
     # 4 byte header
     header_size = 4
@@ -85,7 +82,7 @@ def fragment(packet):
         nbr = nbr + 1
         header = hex(nbr)[2:].zfill(4) + hex(no_of_fragments)[2:].zfill(4) 
         fragment_payload = packet[lower:upper]
-        final_fragment = header + fragment_payload.hex()
+        final_fragment = (header + fragment_payload.hex()).zfill(32)
         fragments.append(bytes(final_fragment, "utf-8"))
         # print("Fragment no. {}:\t {}".format(nbr, final_fragment))
     return fragments
@@ -95,9 +92,7 @@ def defragment(fragments):
     for frg in fragments:
         # print("fragment: ", frg[8:])
         pkt = pkt + frg[8:]
-    # print("defragmented packet: ", pkt)
     return bytes(pkt)
-
 
 def get_image_from_the_internet():
     url = "https://cdn.pixabay.com/photo/2020/02/06/09/39/summer-4823612_960_720.jpg"
@@ -191,7 +186,6 @@ def fragment(packet):
 """
 
 if __name__ == "__main__":
-    defragment_buffer = None
     radio_number = 0
     address = [b"1Node", b"2Node"]
 

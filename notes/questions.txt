@@ -1,7 +1,5 @@
-What is the maximum throughput?
+Control plane?
 
-What does the error "radio hardware not working"?
+Curl?
 
-How do we check the prerequisits?
-
-How do we check the pin connections?
+Can we make the fragmented packets double the size? They are 16 bytes now but we should be able to transmit and receive 32 byte packets.
