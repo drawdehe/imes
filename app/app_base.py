@@ -53,21 +53,29 @@ def rx(timeout=10000):
         if has_payload:
             buffer = radio_rx.read(size)
             print("raw received data:", buffer)
-            no_of_fragments = int(buffer[4:8].zfill(4), 16)
-            print("NO OF FRAGMENTS?", no_of_fragments)
-            fragments.append(buffer)
-            
-            if len(fragments) == no_of_fragments:
-                pkt = defragment(fragments)
-                print(
-                    "Received {} bytes on pipe {}: {}".format(
-                        len(pkt),
-                        pipe_number,
-                        pkt
+            #print("isPv4: ", isIpv4(buffer))
+            try:
+                no_of_fragments = int(buffer[4:8].decode())
+
+                print("NO OF FRAGMENTS?", no_of_fragments)
+                #if (type(buffer) == )
+                print("TYPE BUFFER", buffer)
+                fragments.append(buffer)
+                
+                if len(fragments) == no_of_fragments:
+                    pkt = defragment(fragments)
+                    print(
+                        "Received {} bytes on pipe {}: {}".format(
+                            len(pkt),
+                            pipe_number,
+                            pkt
+                        )
                     )
-                )
-                tun.write(codecs.decode(pkt,"hex")) # codecs.decode() gör om till samma typ av format som när man läser buffern i tx
-                fragments = []
+                    tun.write(codecs.decode(pkt,"hex")) # codecs.decode() gör om till samma typ av format som när man läser buffern i tx
+                    fragments = []
+
+            except UnicodeDecodeError:
+                print("Error, but ignore it")
             
             start_timer = time.monotonic()
 
@@ -95,6 +103,9 @@ def defragment(fragments):
         # print("fragment: ", frg[8:])
         pkt = pkt + frg[8:]
     return bytes(pkt)
+
+#def isIpv4(packet): #not working atm
+ #   return packet[0:1].hex()[1] == '4'
 
 def get_image_from_the_internet():
     url = "https://cdn.pixabay.com/photo/2020/02/06/09/39/summer-4823612_960_720.jpg"
