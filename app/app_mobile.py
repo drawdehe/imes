@@ -57,7 +57,8 @@ def fragment(packet):
         nbr = nbr + 1
         header = hex(nbr)[2:].zfill(4) + hex(no_of_fragments)[2:].zfill(4) 
         fragment_payload = packet[lower:upper]
-        final_fragment = (header + fragment_payload.hex()).zfill(32)
+        final_fragment = (header + fragment_payload.hex()) # här hade vi .zfill(32) förrut
+        final_fragment = final_fragment[::-1].zfill(32)[::-1] # acc[::-1].zfill(9)[::-1]
         fragments.append(bytes(final_fragment, "utf-8"))
         # print("Fragment no. {}:\t {}".format(nbr, final_fragment))
     return fragments
@@ -81,13 +82,13 @@ def rx(timeout=100):
         
         if has_payload:
             buffer = radio_rx.read(radio_rx.payloadSize)
-            no_of_fragments = int(buffer[4:8])
-            # print("NO OF FRAGMENTS?", no_of_fragments)
+            no_of_fragments = int(buffer[4:8].zfill(4), 16) 
+            print("NO OF FRAGMENTS?", no_of_fragments)
             fragments.append(buffer)
-            # print("Fragment: ", buffer)
+            print("Fragment: ", buffer)
             
             if len(fragments) == no_of_fragments:
-                # print("fragments: ", fragments)
+                print("fragments: ", fragments)
                 pkt = defragment(fragments)
                 print(
                     "Packet no. {}. Received {} bytes on pipe {}: {}".format(
@@ -97,7 +98,7 @@ def rx(timeout=100):
                         pkt
                     )
                 )
-                # format_ip_packet(pkt)
+                format_ip_packet(pkt)
                 tun.write(codecs.decode(pkt, "hex"))
                 fragments = []
                 nbr_received = nbr_received + 1
