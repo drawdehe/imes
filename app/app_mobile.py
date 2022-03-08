@@ -58,7 +58,9 @@ def fragment(packet):
         header = hex(nbr)[2:].zfill(4) + hex(no_of_fragments)[2:].zfill(4) 
         fragment_payload = packet[lower:upper]
         final_fragment = (header + fragment_payload.hex()) # här hade vi .zfill(32) förrut
+        print("padded with {} zeroes".format(32 - len(final_fragment)))
         final_fragment = final_fragment[::-1].zfill(32)[::-1] # acc[::-1].zfill(9)[::-1]
+        
         fragments.append(bytes(final_fragment, "utf-8"))
         # print("Fragment no. {}:\t {}".format(nbr, final_fragment))
     return fragments
