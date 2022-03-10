@@ -72,6 +72,8 @@ def defragment(fragments):
         pkt = pkt + frg[8:]
     return bytes(pkt)
 
+#def isIpv4(packet): #not working atm
+ #   return packet[0:1].hex()[1] == '4'
 
 def rx(timeout=100):
     radio_rx.startListening()

@@ -53,35 +53,46 @@ def rx(timeout=10000):
         if has_payload:
             buffer = radio_rx.read(size)
             print("raw received data:", buffer)
-            no_of_fragments = int(buffer[4:8].zfill(4), 16)
-            print("NO OF FRAGMENTS?", no_of_fragments)
-            fragments.append(buffer)
-            
-            if len(fragments) == no_of_fragments:
-                pkt = defragment(fragments)
-                print(
-                    "Received {} bytes on pipe {}: {}".format(
-                        len(pkt),
-                        pipe_number,
-                        pkt
+            #print("isPv4: ", isIpv4(buffer))
+            try:
+                total_frags = int(buffer[4:8].decode())
+
+                # print("NO OF FRAGMENTS?", total_frags)
+                #if (type(buffer) == )
+                # print("TYPE BUFFER", buffer)
+                fragments.append(buffer)
+                
+                if len(fragments) == total_frags:
+                    pkt = defragment(fragments)
+                    print(
+                        "Received {} bytes on pipe {}: {}".format(
+                            len(pkt),
+                            pipe_number,
+                            pkt
+                        )
                     )
-                )
-                tun.write(codecs.decode(pkt,"hex")) # codecs.decode() gör om till samma typ av format som när man läser buffern i tx
-                fragments = []
+                    tun.write(codecs.decode(pkt,"hex")) # codecs.decode() gör om till samma typ av format som när man läser buffern i tx
+                    fragments = []
+
+            except UnicodeDecodeError:
+                print("Error, but ignore it")
             
             start_timer = time.monotonic()
 
 def fragment(packet):
     # 4 byte header
-    header_size = 4
-    payload_size = 16 - header_size
-    no_of_fragments = math.ceil(len(packet)/payload_size)
+    nbr_of_frags = 2
+    frag_nbr = 2
+    id_size = 0
+    payload_size = 16 - nbr_of_frags - frag_nbr - id_size
+    total_frags = math.ceil(len(packet)/payload_size)
     fragments = []
-    for nbr in range(no_of_fragments):
+    for nbr in range(total_frags):
         lower = payload_size * nbr
         upper = payload_size * (nbr + 1)
         nbr = nbr + 1
-        header = hex(nbr)[2:].zfill(4) + hex(no_of_fragments)[2:].zfill(4) 
+        header = hex(nbr)[2:].zfill(4) + hex(total_frags)[2:].zfill(4)
+        # header = hex(nbr)[2:].zfill(4) + hex(total_frags)[2:].zfill(4) + hex(id).zfill(2)
         fragment_payload = packet[lower:upper]
         final_fragment = (header + fragment_payload.hex())
         final_fragment = final_fragment[::-1].zfill(32)[::-1] 
@@ -95,6 +106,9 @@ def defragment(fragments):
         # print("fragment: ", frg[8:])
         pkt = pkt + frg[8:]
     return bytes(pkt)
+
+def isIpv4(packet): #not working atm
+   return packet[0:1].hex()[1] == '4'
 
 def get_image_from_the_internet():
     url = "https://cdn.pixabay.com/photo/2020/02/06/09/39/summer-4823612_960_720.jpg"
