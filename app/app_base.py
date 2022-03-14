@@ -4,24 +4,32 @@ import time
 import struct
 from RF24 import RF24, RF24_PA_LOW, RF24_2MBPS, RF24_250KBPS, RF24_CRC_8, RF24_CRC_DISABLED
 from tuntap import TunTap
-from multiprocessing import Process
+from multiprocessing import Process, Queue, RLock, Condition
 import wget
 import math
 from scapy.all import *
 import codecs
+import threading
 
 iface = 'LongGe'
 tun = TunTap(nic_type="Tun", nic_name="tun0")
 tun.config(ip="192.168.1.10", mask="255.255.255.0")
 size = 2 ** 16 - 1
 
-def tx():
+def tx(queue, cond, count=0):
     radio_tx.stopListening()
+    print("Running tx")
+    cond.acquire()
     while True:
-        packet = tun.read(size)
+        while queue.empty():
+            print("Queue empty. Waiting...")
+            cond.wait(1)
+        print("transmitting")
+        packet = queue.get(False)
         fragments = fragment(packet)
         for f in fragments:
             start_timer = time.monotonic_ns()
+            print("fragment:", f)
             result = radio_tx.write(f)
             end_timer = time.monotonic_ns()
             if not result:
@@ -35,6 +43,9 @@ def tx():
                         len(f)
                     )
                 )
+        cond.release()
+    print("tx done")
+    
 
 def fragment(packet):
     # 4 byte header
@@ -56,10 +67,11 @@ def fragment(packet):
         fragments.append(bytes(final_fragment, "utf-8"))
     return fragments
 
-def rx(timeout=10000):
+def rx(condition, timeout=10000):
     radio_rx.startListening()
     start_timer = time.monotonic()
     fragments = []
+    print("Running rx")
     while (time.monotonic() - start_timer) < timeout:
         has_payload, pipe_number = radio_rx.available_pipe()
         if has_payload:
@@ -81,14 +93,96 @@ def rx(timeout=10000):
 
             except UnicodeDecodeError:
                 print("Error, but ignore it")
-            
             start_timer = time.monotonic()
+    print("leaving rx")
 
 def defragment(fragments):
     pkt = bytearray(0)
     for frg in fragments:
         pkt = pkt + frg[8:]
     return bytes(pkt)
+
+#byt namn
+def receive_from_internet(queue, cond, timeout=100):
+    print("Running receive_from_internet")
+    while True:
+        cond.acquire()
+        packet = tun.read(size)
+        print("Received from internet: ", packet.hex())
+        queue.put(packet.hex())
+        print("Queue size:", queue.qsize())
+        cond.notify_all()
+        cond.release()
+
+if __name__ == "__main__":
+    radio_number = 0
+    address = [b"1Node", b"2Node"]
+    queue = Queue()
+    cond = Condition()
+
+    # Transmitter radio
+    radio_tx = RF24(27, 10, 400000)
+    if not radio_tx.begin():
+        raise RuntimeError("radio_tx hardware is not responding")
+    radio_tx.setPALevel(RF24_PA_LOW)
+    radio_tx.setChannel(77)
+    radio_tx.openWritingPipe(address[radio_number])
+    radio_tx.setAddressWidth(3)
+    radio_tx.setDataRate(RF24_250KBPS)
+    radio_tx.setAutoAck(False)
+    radio_tx.disableDynamicPayloads()
+    radio_tx.setPayloadSize(32)
+    radio_tx.setCRCLength(RF24_CRC_DISABLED)
+
+    # Receiver radio
+    radio_rx = RF24(17, 0, 400000)
+    if not radio_rx.begin():
+        raise RuntimeError("radio_rx hardware is not responding")
+    radio_rx.setPALevel(RF24_PA_LOW)
+    radio_rx.setChannel(76)      
+    radio_rx.openReadingPipe(0, address[radio_number])
+    radio_rx.setAddressWidth(3)
+    radio_rx.setDataRate(RF24_250KBPS)
+    radio_rx.setAutoAck(False)
+    radio_rx.disableDynamicPayloads()
+    radio_rx.setPayloadSize(32)
+    radio_rx.setCRCLength(RF24_CRC_DISABLED)
+
+    print("rad 148")
+    
+    
+    tt = Process(target = tx, args=(queue, cond,))
+    rt = Process(target = rx, args=(cond,))
+    # it = Process(target = receive_from_internet, args=(queue, cond))
+
+    tt.start()
+    rt.start()
+    try:
+        print("Running receive_from_internet")
+        while True:
+            cond.acquire()
+            packet = tun.read(size)
+            print("Received from internet: ", packet.hex())
+            queue.put(packet.hex())
+            print("Queue size:", queue.qsize())
+            cond.notify_all()
+            cond.release()
+        print("leaving receive_from_internet")
+        # it.start()
+        # it.join()
+    except KeyboardInterrupt:
+        print("Keyboard Interrupt detected.")
+    tt.join()
+    rt.join()
+    
+    radio_tx.powerDown()
+    radio_rx.powerDown()
+    tun.close()
+    sys.exit()
+    
+
+    print("Program exiting.")
+    tun.close()
 
 """
 def defragment(fragment):
@@ -172,51 +266,30 @@ def fragment(packet):
     return fragments
 """
 
-if __name__ == "__main__":
-    radio_number = 0
-    address = [b"1Node", b"2Node"]
+### gamla tx
 
-    # Transmitter radio
-    radio_tx = RF24(27, 10, 400000)
-    if not radio_tx.begin():
-        raise RuntimeError("radio_tx hardware is not responding")
-    radio_tx.setPALevel(RF24_PA_LOW)
-    radio_tx.setChannel(77)
-    radio_tx.openWritingPipe(address[radio_number])
-    radio_tx.setAddressWidth(3)
-    radio_tx.setDataRate(RF24_250KBPS)
-    radio_tx.setAutoAck(False)
-    radio_tx.disableDynamicPayloads()
-    radio_tx.setPayloadSize(32)
-    radio_tx.setCRCLength(RF24_CRC_DISABLED)
-
-    # Receiver radio
-    radio_rx = RF24(17, 0, 400000)
-    if not radio_rx.begin():
-        raise RuntimeError("radio_rx hardware is not responding")
-    radio_rx.setPALevel(RF24_PA_LOW)
-    radio_rx.setChannel(76)      
-    radio_rx.openReadingPipe(0, address[radio_number])
-    radio_rx.setAddressWidth(3)
-    radio_rx.setDataRate(RF24_250KBPS)
-    radio_rx.setAutoAck(False)
-    radio_rx.disableDynamicPayloads()
-    radio_rx.setPayloadSize(32)
-    radio_rx.setCRCLength(RF24_CRC_DISABLED)
-
-    try:
-        tt = Process(target = tx)
-        rt = Process(target = rx)
-        time.sleep(1)
-        tt.start()
-        rt.start()
-        tt.join()
-        rt.join()
-    except KeyboardInterrupt:
-        print("Keyboard Interrupt detected. Exiting...")
-        radio_tx.powerDown()
-        radio_rx.powerDown()
-        tun.close()
-        sys.exit()
-    print("Program exiting.")
-    tun.close()
+    # while True:
+    #     # Inte tun(read) utan queue.get(). tun.read() görs istället i en annan metod för att ta emot ip-paket från nätet
+    #     # packet = tun.read(size)
+    #     try:
+    #         packet = queue.get(block=False) # Blocking nödvändigt??
+    #         fragments = fragment(packet)
+    #         for f in fragments:
+    #             start_timer = time.monotonic_ns()
+    #             result = radio_tx.write(f)
+    #             end_timer = time.monotonic_ns()
+    #             if not result:
+    #                 print("Transmission failed or timed out")
+    #             else:
+    #                 print(
+    #                     "Transmission successful! Time to Transmit: "
+    #                     "{} ms. Sent: {}. Size: {}".format(
+    #                         (end_timer - start_timer) / 1000000,
+    #                         f,
+    #                         len(f)
+    #                     )
+    #                 )
+    #     except:
+    #         print("queue empty... for now!")
+    #         break
+    #     count = count + 1
