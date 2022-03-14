@@ -63,27 +63,26 @@ def rx(timeout=100):
     radio_rx.startListening()
     start_timer = time.monotonic()
     fragments = []
-    nbr_received = 0
     while (time.monotonic() - start_timer) < timeout:
         has_payload, pipe_number = radio_rx.available_pipe()
         if has_payload:
             buffer = radio_rx.read(radio_rx.payloadSize)
-            no_of_fragments = int(buffer[4:8].zfill(4), 16) 
-            fragments.append(buffer)            
-            if len(fragments) == no_of_fragments:
-                pkt = defragment(fragments)
-                print(
-                    "Packet no. {}. Received {} bytes on pipe {}: {}".format(
-                        nbr_received,
-                        math.ceil(len(pkt))/2,
-                        pipe_number,
-                        pkt
+            try:
+                no_of_fragments = int(buffer[4:8].zfill(4), 16) 
+                fragments.append(buffer)            
+                if len(fragments) == no_of_fragments:
+                    pkt = defragment(fragments)
+                    print(
+                        "Received {} bytes on pipe {}: {}".format(
+                            math.ceil(len(pkt))/2,
+                            pipe_number,
+                            pkt
+                        )
                     )
-                )
-                tun.write(codecs.decode(pkt, "hex"))
-                fragments = []
-                nbr_received = nbr_received + 1
-            
+                    tun.write(codecs.decode(pkt, "hex"))
+                    fragments = []
+            except binascii.Error:
+                    print("Non-hexadecimal digit in packet.")            
             start_timer = time.monotonic()
 
 
