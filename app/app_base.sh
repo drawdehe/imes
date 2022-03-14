@@ -21,8 +21,8 @@ sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 sudo iptables -A FORWARD -i eth0 -o tun0 -m state --state RELATED,ESTABLISHED -j ACCEPT
 sudo iptables -A FORWARD -i tun0 -o eth0 -j ACCEPT
 
-#echo "Setting rate limit"
-#sudo iptables -A FORWARD -i eth0 -o tun0 -m state --state RELATED,ESTABLISHED -m limit --limit 10/sec -j ACCEPT
+echo "Setting rate limit"
+sudo iptables -A FORWARD -i eth0 -o tun0 -m state --state RELATED,ESTABLISHED -m limit --limit 10/sec -j ACCEPT
 
 echo "Running base program"
 sudo python3 app_base.py
