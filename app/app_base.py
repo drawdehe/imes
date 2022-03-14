@@ -15,17 +15,11 @@ tun = TunTap(nic_type="Tun", nic_name="tun0")
 tun.config(ip="192.168.1.10", mask="255.255.255.0")
 size = 2 ** 16 - 1
 
-def tx(count=0):
+def tx():
     radio_tx.stopListening()
-    nbr_transmitted = 0
-    while count < 1000:
+    while True:
         packet = tun.read(size)
-
-        # print("Packet before fragmentation: ", packet.hex())
-
-        # Fragmentation
         fragments = fragment(packet)
-
         for f in fragments:
             start_timer = time.monotonic_ns()
             result = radio_tx.write(f)
@@ -34,15 +28,33 @@ def tx(count=0):
                 print("Transmission failed or timed out")
             else:
                 print(
-                    "Transmission successful! Packet number: {}. Time to Transmit: "
+                    "Transmission successful! Time to Transmit: "
                     "{} ms. Sent: {}. Size: {}".format(
-                        count +1 ,
                         (end_timer - start_timer) / 1000000,
                         f,
                         len(f)
                     )
                 )
-        count += 1
+
+def fragment(packet):
+    # 4 byte header
+    nbr_of_frags = 2
+    frag_nbr = 2
+    id_size = 0
+    payload_size = 16 - nbr_of_frags - frag_nbr - id_size
+    total_frags = math.ceil(len(packet)/payload_size)
+    fragments = []
+    for nbr in range(total_frags):
+        lower = payload_size * nbr
+        upper = payload_size * (nbr + 1)
+        nbr = nbr + 1
+        header = hex(nbr)[2:].zfill(4) + hex(total_frags)[2:].zfill(4)
+        # header = hex(nbr)[2:].zfill(4) + hex(total_frags)[2:].zfill(4) + hex(id).zfill(2) #ifall vi kör id
+        fragment_payload = packet[lower:upper]
+        final_fragment = (header + fragment_payload.hex())
+        final_fragment = final_fragment[::-1].zfill(32)[::-1] 
+        fragments.append(bytes(final_fragment, "utf-8"))
+    return fragments
 
 def rx(timeout=10000):
     radio_rx.startListening()
@@ -52,16 +64,9 @@ def rx(timeout=10000):
         has_payload, pipe_number = radio_rx.available_pipe()
         if has_payload:
             buffer = radio_rx.read(size)
-            print("raw received data:", buffer)
-            #print("isPv4: ", isIpv4(buffer))
             try:
                 total_frags = int(buffer[4:8].decode())
-
-                # print("NO OF FRAGMENTS?", total_frags)
-                #if (type(buffer) == )
-                # print("TYPE BUFFER", buffer)
                 fragments.append(buffer)
-                
                 if len(fragments) == total_frags:
                     pkt = defragment(fragments)
                     print(
@@ -79,45 +84,11 @@ def rx(timeout=10000):
             
             start_timer = time.monotonic()
 
-def fragment(packet):
-    # 4 byte header
-    nbr_of_frags = 2
-    frag_nbr = 2
-    id_size = 0
-    payload_size = 16 - nbr_of_frags - frag_nbr - id_size
-    total_frags = math.ceil(len(packet)/payload_size)
-    fragments = []
-    for nbr in range(total_frags):
-        lower = payload_size * nbr
-        upper = payload_size * (nbr + 1)
-        nbr = nbr + 1
-        header = hex(nbr)[2:].zfill(4) + hex(total_frags)[2:].zfill(4)
-        # header = hex(nbr)[2:].zfill(4) + hex(total_frags)[2:].zfill(4) + hex(id).zfill(2)
-        fragment_payload = packet[lower:upper]
-        final_fragment = (header + fragment_payload.hex())
-        final_fragment = final_fragment[::-1].zfill(32)[::-1] 
-        fragments.append(bytes(final_fragment, "utf-8"))
-        # print("Fragment no. {}:\t {}".format(nbr, final_fragment))
-    return fragments
-
 def defragment(fragments):
     pkt = bytearray(0)
     for frg in fragments:
-        # print("fragment: ", frg[8:])
         pkt = pkt + frg[8:]
     return bytes(pkt)
-
-def isIpv4(packet): #not working atm
-   return packet[0:1].hex()[1] == '4'
-
-def get_image_from_the_internet():
-    url = "https://cdn.pixabay.com/photo/2020/02/06/09/39/summer-4823612_960_720.jpg"
-    image = wget.download(url)
-    return image
-
-def transmit_image_to_mobile():
-    image = get_image_from_the_internet()
-    return 0
 
 """
 def defragment(fragment):
