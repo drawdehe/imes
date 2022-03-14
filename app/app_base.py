@@ -24,12 +24,10 @@ def tx(queue, cond, count=0):
         while queue.empty():
             print("Queue empty. Waiting...")
             cond.wait()
-        print("transmitting")
         packet = queue.get(False)
         fragments = fragment(packet)
         for f in fragments:
             start_timer = time.monotonic_ns()
-            print("fragment:", f)
             result = radio_tx.write(f)
             end_timer = time.monotonic_ns()
             if not result:
@@ -62,7 +60,6 @@ def fragment(packet):
         header = hex(nbr)[2:].zfill(4) + hex(total_frags)[2:].zfill(4)
         # header = hex(nbr)[2:].zfill(4) + hex(total_frags)[2:].zfill(4) + hex(id).zfill(2) #ifall vi kör id
         fragment_payload = packet[lower:upper]
-        print(packet[lower:upper])
         final_fragment = (header + fragment_payload)
         # final_fragment = final_fragment[::-1].zfill(32)[::-1] 
         fragments.append(bytes(final_fragment, "utf-8"))
@@ -78,13 +75,14 @@ def rx(cond, timeout=10000):
         if has_payload:
             buffer = radio_rx.read(size)
             try:
+                print("buffer in rx",buffer)
                 total_frags = int(buffer[4:8].decode())
                 fragments.append(buffer)
                 if len(fragments) == total_frags:
                     pkt = defragment(fragments)
                     print(
                         "Received {} bytes on pipe {}: {}".format(
-                            len(pkt),
+                            math.ceil(len(pkt)/2),
                             pipe_number,
                             pkt
                         )
@@ -104,16 +102,19 @@ def defragment(fragments):
     return bytes(pkt)
 
 #byt namn
-def receive_from_internet(queue, cond, timeout=100):
-    print("Running receive_from_internet")
-    while True:
-        cond.acquire()
-        packet = tun.read(size)
-        print("Received from internet: ", packet.hex())
-        queue.put(packet.hex())
-        print("Queue size:", queue.qsize())
-        cond.notify_all()
-        cond.release()
+# def receive_from_internet(queue, cond, timeout=100):
+#     print("Running receive_from_internet")
+#     while True:
+#         try:
+#             cond.acquire()
+#             packet = tun.read(size)
+#             print("Received from internet: ", packet.hex())
+#             queue.put(packet.hex())
+#             print("Queue size:", queue.qsize())
+#             cond.notify_all()
+#             cond.release()
+#         except OSError:
+#             print("Message too long")
 
 if __name__ == "__main__":
     radio_number = 0
@@ -154,36 +155,35 @@ if __name__ == "__main__":
     
         tt = Process(target = tx, args=(queue, cond,))
         rt = Process(target = rx, args=(cond,))
-        it = Process(target = receive_from_internet, args=(queue, cond))
+        # it = Process(target = receive_from_internet, args=(queue, cond))
 
         tt.start()
+        time.sleep(1)
         rt.start()
-        it.start()
-        # try:
-        #     print("Running receive_from_internet")
-        #     while True:
-        #         cond.acquire()
-        #         packet = tun.read(size)
-        #         print("Received from internet: ", packet.hex())
-        #         queue.put(packet.hex())
-        #         print("Queue size:", queue.qsize())
-        #         cond.notify_all()
-        #         cond.release()
-        #     print("leaving receive_from_internet")
-        #     # it.start()
-        #     # it.join()
-        # except KeyboardInterrupt:
-        #     print("Keyboard Interrupt detected.")
-
+        time.sleep(1)
+        # it.start()
+        try:
+            print("Running receive_from_internet")
+            while True:
+                cond.acquire()
+                packet = tun.read(size)
+                print("Received {} bytes from the  internet: {}".format(len(packet), packet.hex()))
+                queue.put(packet.hex())
+                print("Queue size:", queue.qsize())
+                cond.notify_all()
+                cond.release()
+            print("leaving receive_from_internet")
+            # it.start()
+            # it.join()
+        except KeyboardInterrupt:
+            print("Keyboard Interrupt detected.")
+            radio_tx.powerDown()
+            radio_rx.powerDown()
+            tun.close()
+            sys.exit()
         tt.join()
         rt.join()
-        it.join()
-    
-    radio_tx.powerDown()
-    radio_rx.powerDown()
-    tun.close()
-    sys.exit()
-    
+        
 
     print("Program exiting.")
     tun.close()

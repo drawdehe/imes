@@ -5,6 +5,7 @@
 #sudo ip addr add 192.168.1.10/24 dev tun0
 #sudo ip link set dev tun0 up
 
+
 echo "Clearing router table"
 sudo iptables -P INPUT ACCEPT
 sudo iptables -P FORWARD ACCEPT
@@ -26,3 +27,7 @@ sudo iptables -A FORWARD -i eth0 -o tun0 -m state --state RELATED,ESTABLISHED -m
 
 echo "Running base program"
 sudo python3 app_base.py
+
+echo "Removing old interfaces if they exist"
+sudo ip link del tun0
+sudo ip tuntap del mode tun dev tun0
