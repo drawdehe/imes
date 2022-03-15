@@ -14,9 +14,11 @@ When the program is interrupted, the TUN interface that was created in the app_b
 In one terminal, execute the follow commands:
 
 > cd app
+> 
 > sudo python3 app_mobile.py
 
 This will prompt the password for inutiuser.
+
 In another terminal, run the mobile.sh script to set the tun0 interface as default.
 
 > ./mobile.sh
