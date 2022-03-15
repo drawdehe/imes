@@ -11,7 +11,7 @@ When the program is interrupted, the TUN interface that was created in the app_b
 
 ## On the mobile unit (inuti37)
 
-In one terminal, execute the follow commands:
+Navigate to the app/ directory and execute the following command.
 
 > cd app
 > 
