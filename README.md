@@ -7,7 +7,7 @@ Navigate to the app/ directory and execute the following command.
 
 This script clears any existing routing tables and sets up the appropriate new tables. 
 The script then executes the app_base.py program, allowing the raspberry pi to act as a base station.
-When the program is interrupted, the TUN interface that was created in the app_base program is deleted.
+When the program is interrupted, the TUN interface that was created in the app_base.py program is deleted.
 
 ## On the mobile unit (inuti37)
 
