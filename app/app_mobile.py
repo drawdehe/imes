@@ -8,6 +8,7 @@ from multiprocessing import Process
 # from scapy.all import *
 import math
 import codecs
+import os
 
 iface = 'LongGe'
 tun = TunTap(nic_type="Tun", nic_name="tun0")
@@ -121,9 +122,12 @@ if __name__ == "__main__":
     try:
         tt = Process(target = tx)
         rt = Process(target = rx)
+        
         time.sleep(1)
         tt.start()
+        time.sleep(1)
         rt.start()
+        time.sleep(1)
         tt.join()
         rt.join()
     except KeyboardInterrupt:
