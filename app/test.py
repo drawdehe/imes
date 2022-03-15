@@ -18,6 +18,7 @@ def test_tx(queue, condition):
     failures = 0
     service_times = open("output/service_times.txt", "w")
     delays = open("output/delays.txt", "w")
+    throughput = open("output/throughput.txt", "w")
     count = 0
     while failures < 10:
         count+=1
@@ -27,7 +28,9 @@ def test_tx(queue, condition):
             condition.wait()
         start_timer = time.monotonic_ns() 
         payload = queue.get(False)
-        buffer = struct.pack("<f", payload)
+        buffer = struct.pack("<d", payload)
+        # print("payload:", payload)
+        # print("buffer", struct.unpack("<d", buffer))
         result = radio_tx.write(buffer)
         end_timer = time.monotonic_ns()
         if not result:
@@ -41,9 +44,12 @@ def test_tx(queue, condition):
             #         payload
             #     )
             # )
+            # print("buffer size:", sys.getsizeof(payload))
             service_times.write(str(end_timer-start_timer) + "\n")
             delays.write(str(end_timer - int(payload)) + "\n")
-        # Decreasing sleep time
+            # print("payload size:", sys.getsizeof(payload), " timer:", (end_timer-start_timer)/1000000000)
+            # print("Throughput:", (sys.getsizeof(payload)/((end_timer-start_timer)/1000000000))*8/1000, "kbit/s")
+            throughput.write(str((sys.getsizeof(payload)/((end_timer-start_timer)/1000000000))*8) + "\n")
         condition.release()
     service_times.close()
     delays.close()
@@ -94,17 +100,18 @@ if __name__ == "__main__":
             queue_sizes = open("output/queue_size.txt", "w")
             count = 0
             lbda = 1
-            while count < 100000:
+            while count < 10000:
                 cond.acquire()
-                # print("payload: ", payload[0])
                 payload[0] = time.monotonic_ns()
                 queue.put(payload[0])
                 cond.notify_all()
                 # print("Queued\t {} \t\tQueue size: {}. \tLambda: {}".format(payload[0], queue.qsize(), lbda))
                 queue_sizes.write(str(queue.qsize()) + "\n")
-                time.sleep(1/lbda)
+                time.sleep(0.01)
                 lbda += 1
-                payload[0] += 0.01
+                # payload[0] += 0.01
+                if(lbda % 1000 == 0):
+                    print("count: ", lbda)
                 count += 1
                 cond.release()
             print("Simulation completed")
@@ -119,27 +126,3 @@ if __name__ == "__main__":
     sys.exit()
     print("Program exiting.")
     tun.close()
-
-# def test_rx(queue, condition, timeout=10):
-#     radio_rx.startListening()  # put radio in RX mode
-#     start_timer = time.monotonic()
-#     while (time.monotonic() - start_timer) < timeout:
-#         condition.acquire()
-#         has_payload, pipe_number = radio_rx.available_pipe()
-#         if has_payload:
-#             buffer = radio_rx.read(radio_rx.payloadSize)
-#             payload[0] = struct.unpack("<f", buffer[:4])[0]
-#             queue.put(payload[0])
-#             condition.notify_all()
-#             print(
-#                 "Received {} bytes on pipe {}: {}".format(
-#                     radio_rx.payloadSize,
-#                     pipe_number,
-#                     payload[0]
-#                 )
-#             )
-#             start_timer = time.monotonic()  # reset the timeout timer
-#         condition.release()
-#     print("Nothing received in", timeout, "seconds. Leaving RX role")
-#     # recommended behavior is to keep in TX mode while idle
-#     radio_rx.stopListening()  # put the radio in TX mode

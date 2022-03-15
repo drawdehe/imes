@@ -22,8 +22,6 @@ def tx(queue, cond, count=0):
         while queue.empty():
             print("Queue empty. Waiting...")
             cond.wait()
-        # Betjäning påbörjas
-        start_timer = time.monotonic_ns()
         packet = queue.get(False)
         fragments = fragment(packet)
         for f in fragments:
@@ -41,12 +39,6 @@ def tx(queue, cond, count=0):
                         len(f)
                     )
                 )
-                # Betjäning avslutas
-                end_timer = time.monotonic_ns()
-                service_time = end_timer - start_timer
-                # Print and write to file
-                print("Service time:", service_time/1000000, " ms")
-                sf.write(str(service_time) + "\n")
         cond.release()
     print("tx done")
     
@@ -64,7 +56,6 @@ def fragment(packet):
         upper = payload_size * (nbr + 1)
         nbr = nbr + 1
         header = hex(nbr)[2:].zfill(4) + hex(total_frags)[2:].zfill(4)
-        # header = hex(nbr)[2:].zfill(4) + hex(total_frags)[2:].zfill(4) + hex(id).zfill(2) #ifall vi kör id
         fragment_payload = packet[lower:upper]
         final_fragment = (header + fragment_payload)
         final_fragment = final_fragment[::-1].zfill(32)[::-1] 
@@ -174,85 +165,3 @@ if __name__ == "__main__":
 
     print("Program exiting.")
     tun.close()
-
-"""
-def defragment(fragment):
-    if (defragment_buffer == None):
-        defragment_buffer = [None] * total_fragment_nbr
-    fragment_nbr = int(fragment[:4])
-    total_fragment_nbr = int(fragment[4:8])
-    payload = 0
-    defragment_buffer[fragment_nbr - 1] = fragment[8:]
-    if None not in defragment_buffer:
-        for f in defragment_buffer:
-            payload = payload + f
-        defragment_buffer = None
-        print("Payload after defragmentation: ", payload)
-        return payload
-"""
-
-"""
-def fragment(packet):
-    fragments = []
-
-    if packet[0:1].hex()[1] == '4': # IPv4
-        ihl = packet[1:2].hex()[1]
-        ihl = int(ihl)
-        header = packet[0:ihl*8]
-        print("Header: ", header)
-        payload = packet[ihl*8:]       
-        
-        nbr_fragments = 0
-        max_payload_size = 12 #in bytes
-        print("Payload before split: ", payload)
-        while len(payload) > 0:
-            print("\nFragment no.", nbr_fragments+1)
-            if(len(payload) <= max_payload_size*2): 
-                # Add header w/ offset + no more fragments
-
-                x = header[:13]
-                y = header[16:]
-
-                o = nbr_fragments * max_payload_size # payload is 12
-                o_hex = hex(o)
-                z_o_hex = o_hex[2:].zfill(3)
-
-                h = x + bytes(z_o_hex, 'utf-8') + y
-                f = h + payload[:]
-
-                fragments.append(f)
-                print("Fragment header:\t", h)
-                print("Fragment with payload:\t", f)
-                payload = 0
-                break
-            else:
-                # Add header w/ or without offset + more fragments
-                temp = list(header)
-
-                # Set more fragments flag
-                temp[12] = 50
-
-                # Offset field
-
-                offset = nbr_fragments * max_payload_size # payload is 12
-                offset_hex = hex(offset)
-                zoffset_hex = offset_hex[2:].zfill(3)
-
-                # Convert new header to bytes, append fragmented payload
-
-                new_header = bytes(temp)
-
-                first_part_header = new_header[:13]
-                last_part_header = new_header[16:]
-
-                final_header = first_part_header + bytes(zoffset_hex, 'utf-8') + last_part_header
-                print("Fragment header:\t", final_header)
-
-                fragment = final_header + payload[:max_payload_size*2]
-                fragments.append(fragment)
-                print("Fragment with payload:\t", fragment)
-
-                payload = payload[max_payload_size*2:]
-            nbr_fragments = nbr_fragments + 1
-    return fragments
-"""
