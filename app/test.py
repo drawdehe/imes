@@ -94,13 +94,13 @@ if __name__ == "__main__":
             queue_sizes = open("output/queue_size.txt", "w")
             count = 0
             lbda = 1
-            while count < 10000:
+            while count < 100000:
                 cond.acquire()
                 # print("payload: ", payload[0])
                 payload[0] = time.monotonic_ns()
                 queue.put(payload[0])
                 cond.notify_all()
-                print("Queued\t {} \t\tQueue size: {}. \tLambda: {}".format(payload[0], queue.qsize(), lbda))
+                # print("Queued\t {} \t\tQueue size: {}. \tLambda: {}".format(payload[0], queue.qsize(), lbda))
                 queue_sizes.write(str(queue.qsize()) + "\n")
                 time.sleep(1/lbda)
                 lbda += 1

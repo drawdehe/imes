@@ -1,7 +1,0 @@
-Control plane?
-
-Curl?
-
-Can we make the fragmented packets double the size? They are 16 bytes now but we should be able to transmit and receive 32 byte packets.
-
-Zero padding from the radio?
