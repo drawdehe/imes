@@ -4,12 +4,9 @@ import time
 import struct
 from RF24 import RF24, RF24_PA_LOW, RF24_2MBPS, RF24_250KBPS, RF24_CRC_8, RF24_CRC_DISABLED
 from tuntap import TunTap
-from multiprocessing import Process, Queue, RLock, Condition, Manager
-import wget
+from multiprocessing import Process, Queue, Condition, Manager
 import math
-from scapy.all import *
 import codecs
-import threading
 
 iface = 'LongGe'
 tun = TunTap(nic_type="Tun", nic_name="tun0")
@@ -19,28 +16,37 @@ size = 2 ** 16 - 1
 def tx(queue, cond, count=0):
     radio_tx.stopListening()
     print("Running tx")
+    sf = open("service_times.txt", "a")
     while True:
         cond.acquire()
         while queue.empty():
             print("Queue empty. Waiting...")
             cond.wait()
+        # Betjäning påbörjas
+        start_timer = time.monotonic_ns()
         packet = queue.get(False)
         fragments = fragment(packet)
         for f in fragments:
-            start_timer = time.monotonic_ns()
+            frag_start = time.monotonic_ns()
             result = radio_tx.write(f)
-            end_timer = time.monotonic_ns()
+            frag_sent = time.monotonic_ns()
             if not result:
                 print("Transmission failed or timed out")
             else:
                 print(
                     "Transmission successful! Time to Transmit: "
                     "{} ms. Sent: {}. Size: {}.".format(
-                        (end_timer - start_timer) / 1000000,
+                        (frag_sent- frag_start) / 1000000,
                         f,
                         len(f)
                     )
                 )
+                # Betjäning avslutas
+                end_timer = time.monotonic_ns()
+                service_time = end_timer - start_timer
+                # Print and write to file
+                print("Service time:", service_time/1000000, " ms")
+                sf.write(str(service_time) + "\n")
         cond.release()
     print("tx done")
     
@@ -61,7 +67,7 @@ def fragment(packet):
         # header = hex(nbr)[2:].zfill(4) + hex(total_frags)[2:].zfill(4) + hex(id).zfill(2) #ifall vi kör id
         fragment_payload = packet[lower:upper]
         final_fragment = (header + fragment_payload)
-        # final_fragment = final_fragment[::-1].zfill(32)[::-1] 
+        final_fragment = final_fragment[::-1].zfill(32)[::-1] 
         fragments.append(bytes(final_fragment, "utf-8"))
     return fragments
 
@@ -75,7 +81,6 @@ def rx(cond, timeout=10000):
         if has_payload:
             buffer = radio_rx.read(size)
             try:
-                print("buffer in rx",buffer)
                 total_frags = int(buffer[4:8].decode())
                 fragments.append(buffer)
                 if len(fragments) == total_frags:
@@ -101,20 +106,6 @@ def defragment(fragments):
         pkt = pkt + frg[8:]
     return bytes(pkt)
 
-#byt namn
-# def receive_from_internet(queue, cond, timeout=100):
-#     print("Running receive_from_internet")
-#     while True:
-#         try:
-#             cond.acquire()
-#             packet = tun.read(size)
-#             print("Received from internet: ", packet.hex())
-#             queue.put(packet.hex())
-#             print("Queue size:", queue.qsize())
-#             cond.notify_all()
-#             cond.release()
-#         except OSError:
-#             print("Message too long")
 
 if __name__ == "__main__":
     radio_number = 0
@@ -155,13 +146,11 @@ if __name__ == "__main__":
     
         tt = Process(target = tx, args=(queue, cond,))
         rt = Process(target = rx, args=(cond,))
-        # it = Process(target = receive_from_internet, args=(queue, cond))
 
         tt.start()
         time.sleep(1)
         rt.start()
         time.sleep(1)
-        # it.start()
         try:
             print("Running receive_from_internet")
             while True:
@@ -173,8 +162,6 @@ if __name__ == "__main__":
                 cond.notify_all()
                 cond.release()
             print("leaving receive_from_internet")
-            # it.start()
-            # it.join()
         except KeyboardInterrupt:
             print("Keyboard Interrupt detected.")
             radio_tx.powerDown()
@@ -269,31 +256,3 @@ def fragment(packet):
             nbr_fragments = nbr_fragments + 1
     return fragments
 """
-
-### gamla tx
-
-    # while True:
-    #     # Inte tun(read) utan queue.get(). tun.read() görs istället i en annan metod för att ta emot ip-paket från nätet
-    #     # packet = tun.read(size)
-    #     try:
-    #         packet = queue.get(block=False) # Blocking nödvändigt??
-    #         fragments = fragment(packet)
-    #         for f in fragments:
-    #             start_timer = time.monotonic_ns()
-    #             result = radio_tx.write(f)
-    #             end_timer = time.monotonic_ns()
-    #             if not result:
-    #                 print("Transmission failed or timed out")
-    #             else:
-    #                 print(
-    #                     "Transmission successful! Time to Transmit: "
-    #                     "{} ms. Sent: {}. Size: {}".format(
-    #                         (end_timer - start_timer) / 1000000,
-    #                         f,
-    #                         len(f)
-    #                     )
-    #                 )
-    #     except:
-    #         print("queue empty... for now!")
-    #         break
-    #     count = count + 1
