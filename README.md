@@ -22,4 +22,4 @@ In another terminal, run the mobile.sh script to set the tun0 interface as defau
 > ./mobile.sh
 
 Beware that this might terminate your ssh connection if your computer and your raspberry pi are on different subnets.
-Now you can ping an internet server.
+Now you can ping an internet server from any free terminal on the mobile unit.
