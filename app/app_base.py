@@ -71,7 +71,7 @@ def fragment(packet):
         fragments.append(bytes(final_fragment, "utf-8"))
     return fragments
 
-def rx(cond, timeout=10000):
+def rx(timeout=10000):
     radio_rx.startListening()
     start_timer = time.monotonic()
     fragments = []
@@ -145,7 +145,7 @@ if __name__ == "__main__":
         cond = manager.Condition()
     
         tt = Process(target = tx, args=(queue, cond,))
-        rt = Process(target = rx, args=(cond,))
+        rt = Process(target = rx, args=())
 
         tt.start()
         time.sleep(1)

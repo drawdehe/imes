@@ -16,8 +16,8 @@ def test_tx(queue, condition):
     """Transmits an incrementing float every second"""
     radio_tx.stopListening()  # put radio in TX mode
     failures = 0
-    service_times = open("service_times.txt", "w")
-    delays = open("delays.txt", "w")
+    service_times = open("output/service_times.txt", "w")
+    delays = open("output/delays.txt", "w")
     count = 0
     while failures < 10:
         count+=1
@@ -42,7 +42,7 @@ def test_tx(queue, condition):
             #     )
             # )
             service_times.write(str(end_timer-start_timer) + "\n")
-            delays.write(str(count) + "\t" + str(end_timer - int(payload)) + "\t" + str(queue.qsize()) +  "\n")
+            delays.write(str(end_timer - int(payload)) + "\n")
         # Decreasing sleep time
         condition.release()
     service_times.close()
@@ -91,22 +91,23 @@ if __name__ == "__main__":
         payload = [0.0]
 
         try:
-            queue_sizes = open("queue_size.txt", "w")
+            queue_sizes = open("output/queue_size.txt", "w")
             count = 0
             lbda = 1
-            while count < 100000:
+            while count < 10000:
                 cond.acquire()
                 # print("payload: ", payload[0])
                 payload[0] = time.monotonic_ns()
                 queue.put(payload[0])
                 cond.notify_all()
                 print("Queued\t {} \t\tQueue size: {}. \tLambda: {}".format(payload[0], queue.qsize(), lbda))
-                queue_sizes.write(str(lbda) + " " + str(queue.qsize()) + "\n")
+                queue_sizes.write(str(queue.qsize()) + "\n")
                 time.sleep(1/lbda)
-                lbda *= 1.01
+                lbda += 1
                 payload[0] += 0.01
                 count += 1
                 cond.release()
+            print("Simulation completed")
             queue_sizes.close()
         except KeyboardInterrupt:
             print("\nKeyboardInterrupt detected")      
