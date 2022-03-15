@@ -6,15 +6,13 @@ Navigate to the app/ directory and execute the following command.
 > ./app_base.sh
 
 This script clears any existing routing tables and sets up the appropriate new tables. 
-The script then executes the app_base.py program, allowing the Pi to act as a base station.
+The script then executes the app_base.py program, allowing the raspberry pi to act as a base station.
 When the program is interrupted, the TUN interface that was created in the app_base program is deleted.
 
 ## On the mobile unit (inuti37)
 
 Navigate to the app/ directory and execute the following command.
 
-> cd app
-> 
 > sudo python3 app_mobile.py
 
 This will prompt the password for inutiuser.
