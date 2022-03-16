@@ -24,7 +24,7 @@ def test_tx(queue, condition):
         count+=1
         condition.acquire()
         while queue.empty():
-            print("Queue empty. Waiting...")
+            # print("Queue empty. Waiting...")
             condition.wait()
         start_timer = time.monotonic_ns() 
         payload = queue.get(False)
@@ -100,20 +100,19 @@ if __name__ == "__main__":
             queue_sizes = open("output/queue_size.txt", "w")
             count = 0
             lbda = 1
-            while count < 10000:
+            while count < 100000:
+                stime = time.monotonic_ns()
                 cond.acquire()
                 payload[0] = time.monotonic_ns()
                 queue.put(payload[0])
                 cond.notify_all()
-                # print("Queued\t {} \t\tQueue size: {}. \tLambda: {}".format(payload[0], queue.qsize(), lbda))
                 queue_sizes.write(str(queue.qsize()) + "\n")
-                time.sleep(0.01)
-                lbda += 1
-                # payload[0] += 0.01
-                if(lbda % 1000 == 0):
-                    print("count: ", lbda)
-                count += 1
                 cond.release()
+                time.sleep(1/lbda)
+                lbda +=1
+                if(count % 100 == 0):
+                    print("count:\t", count)
+                count += 1
             print("Simulation completed")
             queue_sizes.close()
         except KeyboardInterrupt:
